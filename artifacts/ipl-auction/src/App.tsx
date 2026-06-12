@@ -90,7 +90,7 @@ function HomeRedirect() {
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isSignedIn, isLoaded } = useAuth();
   if (!isLoaded) return null;
-  if (!isSignedIn) return <Redirect to="/" />;
+  if (!isSignedIn) return <Redirect to="/sign-in" />;
   return <Component />;
 }
 
