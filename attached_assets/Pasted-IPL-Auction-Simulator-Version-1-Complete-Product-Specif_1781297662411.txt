@@ -1,0 +1,569 @@
+IPL Auction Simulator (Version 1) – Complete Product Specification
+
+Build a production-quality full-stack web application called IPL Auction Simulator.
+
+The application should allow friends to create and participate in realistic IPL auctions following actual IPL auction rules.
+
+The project must be scalable, modular, responsive, visually appealing, and support real-time multiplayer functionality.
+
+Core Objective
+
+Users should be able to:
+
+Select an IPL season as the starting point.
+Use actual IPL squad data from that season.
+Retain players according to IPL retention rules.
+Release players back into the auction pool.
+Conduct a live IPL auction with friends.
+Support multiple owners per franchise.
+Chat with co-owners during auctions.
+Track budgets, squad composition, and auction status live.
+After auction completion, send all squads to Gemini AI.
+Gemini AI ranks teams and predicts the strongest squad.
+
+Version 1 ends here.
+
+Do NOT build match simulation, fantasy scoring, or cricket gameplay.
+
+Historical IPL Data
+
+Support IPL seasons:
+
+2014
+2015
+2016
+2017
+2018
+2019
+2020
+2021
+2022
+2023
+2024
+2025
+
+For every season store:
+
+Franchise names
+Squad lists
+Player roles
+Nationality
+Auction price
+Retained players
+Released players
+Captains
+Overseas status
+
+Use publicly available IPL squad and auction data.
+
+Store data in database.
+
+Do not hardcode.
+
+Design database so future seasons can easily be added.
+
+User Flow
+Landing Page
+
+Modern IPL-themed homepage.
+
+Sections:
+
+Hero section
+Features
+Demo screenshots
+How auction works
+Create Room button
+
+Design quality should feel similar to:
+
+ESPN Cricinfo
+IPL Official Site
+Dream11
+
+Use modern glassmorphism and smooth animations.
+
+Dark theme by default.
+
+Authentication
+
+Support:
+
+Google Login
+Email Login
+
+User profile:
+
+Name
+Avatar
+Email
+Statistics
+Dashboard
+
+After login:
+
+Create Auction Room
+Join Auction Room
+Past Auctions
+Profile
+Settings
+Create Auction Room
+
+Host configures:
+
+Room Name
+
+Starting Season
+
+Auction Type:
+- Mega Auction
+- Mini Auction
+
+Budget:
+(default IPL budget)
+
+Squad Size:
+(default IPL rules)
+
+Maximum Owners Per Team:
+1-3
+
+Auction Speed:
+Fast
+Normal
+Slow
+
+Generate room code.
+
+Example:
+
+IPL2026A
+Joining Room
+
+Users join via:
+
+Room Code
+
+Display room lobby.
+
+Franchise Selection
+
+Available teams:
+
+CSK
+MI
+RCB
+KKR
+SRH
+DC
+RR
+PBKS
+GT
+LSG
+
+Each franchise can have:
+
+1
+2
+or
+3 owners
+
+Once limit reached:
+
+Team Locked
+Co-Owner System
+
+If multiple users choose same team:
+
+Create private franchise channel.
+
+Example:
+
+CSK Owners Chat
+
+Only CSK owners can view.
+
+Features:
+
+Real-time messaging
+Typing indicators
+Online status
+Message history
+Auction Preparation
+
+Example:
+
+User selects:
+
+2025 IPL Season
+
+System loads actual 2025 squads.
+
+User now prepares for:
+
+2026 Auction
+Retention System
+
+Display actual squad.
+
+Allow retention.
+
+Example:
+
+Retain:
+Jadeja
+Pathirana
+Gaikwad
+Dube
+
+Remaining players become auction pool.
+
+Apply IPL retention rules.
+
+Configurable:
+
+Official IPL Rules
+Custom Rules
+Auction Pool Generation
+
+Create pool using:
+
+Released Players
+Unsold Players
+New Players
+Domestic Players
+Overseas Players
+
+
+Support search/filter.
+
+---
+
+# Live Auction Screen
+
+Main auction interface.
+
+Layout:
+
+Left:
+
+```text
+Current Player Card
+
+Center:
+
+Player Image
+Name
+Role
+Country
+Age
+Base Price
+Previous Team
+Stats
+
+Right:
+
+Current Bid
+Bid History
+Countdown Timer
+
+Bottom:
+
+All Team Budgets
+Auction Mechanics
+
+Real-time bidding.
+
+Example:
+
+Base Price:
+2 Cr
+
+MI:
+3 Cr
+
+CSK:
+4 Cr
+
+RCB:
+5 Cr
+
+Timer resets after each valid bid.
+
+When timer ends:
+
+SOLD
+
+Player assigned.
+
+IPL Rule Engine
+
+Must enforce:
+
+Budget limits
+
+Squad limits
+
+Overseas limits
+
+Minimum Indian players
+
+Maximum squad size
+
+Retention deductions
+
+Unsold players
+
+Cannot exceed purse
+
+Cannot exceed overseas slots
+
+Cannot bid if budget insufficient
+
+Real-Time Updates
+
+Use WebSockets.
+
+Everything updates instantly:
+
+New bid
+Team budget
+Squad changes
+Chat
+Auction results
+Timer
+
+No page refreshes.
+
+Team Dashboard
+
+Each franchise sees:
+
+Budget Remaining
+
+Players Bought
+
+Retained Players
+
+Overseas Count
+
+Indian Count
+
+Squad Size
+
+Role Breakdown
+Analytics
+
+Show:
+
+Batters
+Bowlers
+All-rounders
+Wicketkeepers
+
+Average Age
+
+Indian/Overseas Ratio
+
+Money Spent
+Auction Completion
+
+After all players processed:
+
+Lock auction.
+
+Generate final squads.
+
+Gemini AI Integration
+
+Create structured JSON:
+
+{
+  "CSK": {
+    "budgetRemaining": 5.5,
+    "players": [...]
+  }
+}
+
+Send to Gemini.
+
+Prompt Gemini to analyze:
+
+Rank all teams.
+
+Evaluate:
+
+Top Order
+Middle Order
+Finishers
+Spin Attack
+Pace Attack
+Death Bowling
+Powerplay Bowling
+Bench Strength
+Captaincy
+Balance
+Overall Squad Depth
+
+Return rankings from 1 to 10.
+
+Provide detailed reasoning.
+AI Results Page
+
+Display:
+
+Rank #1
+
+Predicted Champion
+
+Show rankings.
+
+Show scorecards.
+
+Show strengths.
+
+Show weaknesses.
+
+Beautiful cards.
+
+Animated reveal.
+
+Database Design
+
+Tables:
+
+users
+
+rooms
+
+room_members
+
+teams
+
+team_owners
+
+players
+
+player_seasons
+
+retentions
+
+auction_pool
+
+bids
+
+purchases
+
+messages
+
+ai_reports
+
+Use proper indexing.
+
+Support thousands of rooms.
+
+Tech Stack
+
+Frontend:
+
+Next.js
+TypeScript
+Tailwind
+Shadcn UI
+Framer Motion
+
+Backend:
+
+Node.js
+Express
+Socket.IO
+
+Database:
+
+PostgreSQL
+
+ORM:
+
+Prisma
+
+Authentication:
+
+NextAuth
+
+Caching:
+
+Redis
+
+AI:
+
+Gemini API
+
+Hosting:
+
+Vercel (frontend)
+Railway / Render (backend)
+Neon PostgreSQL
+UI Requirements
+
+The UI must look premium.
+
+Reference quality:
+
+IPL Official Website
+Cricbuzz
+Dream11
+ESPN Cricinfo
+
+Requirements:
+
+Dark mode
+Glassmorphism
+Smooth animations
+Team colors
+Responsive design
+Mobile support
+Desktop optimized
+Modern cards
+Real-time transitions
+
+No basic bootstrap-style pages.
+
+The application should feel like a commercial SaaS product.
+
+Scalability Requirements
+
+Architecture must support:
+
+Thousands of concurrent users
+Hundreds of auction rooms
+Multiple auctions simultaneously
+Future support for:
+Match simulation
+Fantasy points
+Live tournaments
+AI commentary
+Mobile app
+
+Code must be modular, maintainable, and production-ready.
+
+Deliverables
+
+Generate:
+
+Full project architecture
+Database schema
+Prisma models
+API routes
+Socket.IO architecture
+UI wireframes
+Folder structure
+Authentication flow
+Auction engine implementation
+Retention system
+AI integration
+Deployment guide
+Environment variables
+Seed scripts for IPL historical data
+Complete production-ready source code
+
+Build the entire Version 1 end-to-end with clean architecture, TypeScript, scalability, security, and modern engineering practices.
