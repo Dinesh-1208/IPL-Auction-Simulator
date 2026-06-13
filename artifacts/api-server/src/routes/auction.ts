@@ -18,15 +18,30 @@ async function getAuctionRoom(code: string): Promise<RoomRow | null> {
 
 async function buildPlayerCard(entry: typeof auctionPoolTable.$inferSelect) {
   const player = await db.select().from(playersTable).where(eq(playersTable.id, entry.playerId)).limit(1);
-  let prevTeamName: string | null = null;
+
+  // Get most recent season stats + previous team
   const seasonEntries = await db.select({
     franchiseName: franchisesTable.name,
+    franchiseShortName: franchisesTable.shortName,
+    franchisePrimaryColor: franchisesTable.primaryColor,
+    age: playerSeasonsTable.age,
+    matchesPlayed: playerSeasonsTable.matchesPlayed,
+    runs: playerSeasonsTable.runs,
+    wickets: playerSeasonsTable.wickets,
+    strikeRate: playerSeasonsTable.strikeRate,
+    economy: playerSeasonsTable.economy,
+    highScore: playerSeasonsTable.highScore,
+    bestBowling: playerSeasonsTable.bestBowling,
   }).from(playerSeasonsTable)
     .leftJoin(franchisesTable, eq(franchisesTable.id, playerSeasonsTable.franchiseId))
     .where(eq(playerSeasonsTable.playerId, entry.playerId))
     .orderBy(desc(playerSeasonsTable.seasonYear))
     .limit(1);
-  if (seasonEntries[0]?.franchiseName) prevTeamName = seasonEntries[0].franchiseName;
+
+  const latestSeason = seasonEntries[0];
+  const prevTeamName = latestSeason?.franchiseName ?? null;
+  const prevTeamShortName = latestSeason?.franchiseShortName ?? null;
+  const prevTeamColor = latestSeason?.franchisePrimaryColor ?? null;
 
   let soldToTeamName: string | null = null;
   if (entry.soldToTeamId) {
@@ -38,19 +53,34 @@ async function buildPlayerCard(entry: typeof auctionPoolTable.$inferSelect) {
     }
   }
 
+  const p = player[0];
   return {
     id: entry.id,
     playerId: entry.playerId,
-    name: player[0]?.name ?? "Unknown",
-    role: player[0]?.role ?? "Unknown",
-    nationality: player[0]?.nationality ?? "India",
-    isOverseas: player[0]?.isOverseas ?? false,
+    name: p?.name ?? "Unknown",
+    role: p?.role ?? "Unknown",
+    nationality: p?.nationality ?? "India",
+    isOverseas: p?.isOverseas ?? false,
+    isCapped: p?.isCapped ?? false,
+    battingStyle: p?.battingStyle ?? null,
+    bowlingStyle: p?.bowlingStyle ?? null,
+    age: latestSeason?.age ?? p?.age ?? null,
     basePriceCrore: parseFloat(entry.basePriceCrore as string),
     status: entry.status as "available" | "sold" | "unsold" | "retained",
     soldToCrore: entry.soldPriceCrore ? parseFloat(entry.soldPriceCrore as string) : null,
     soldToTeamId: entry.soldToTeamId,
     soldToTeamName,
     previousTeamName: prevTeamName,
+    previousTeamShortName: prevTeamShortName,
+    previousTeamColor: prevTeamColor,
+    // Season stats
+    matchesPlayed: latestSeason?.matchesPlayed ?? null,
+    runs: latestSeason?.runs ?? null,
+    wickets: latestSeason?.wickets ?? null,
+    strikeRate: latestSeason?.strikeRate ? parseFloat(latestSeason.strikeRate as string) : null,
+    economy: latestSeason?.economy ? parseFloat(latestSeason.economy as string) : null,
+    highScore: latestSeason?.highScore ?? null,
+    bestBowling: latestSeason?.bestBowling ?? null,
   };
 }
 

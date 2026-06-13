@@ -11,6 +11,7 @@ export const playersTable = pgTable("players", {
   isCapped: boolean("is_capped").notNull().default(false),
   battingStyle: text("batting_style"),
   bowlingStyle: text("bowling_style"),
+  age: integer("age"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -24,6 +25,14 @@ export const playerSeasonsTable = pgTable("player_seasons", {
   age: integer("age"),
   isCaptain: boolean("is_captain").notNull().default(false),
   isRetained: boolean("is_retained").notNull().default(false),
+  // Season stats
+  matchesPlayed: integer("matches_played"),
+  runs: integer("runs"),
+  wickets: integer("wickets"),
+  strikeRate: numeric("strike_rate", { precision: 6, scale: 2 }),
+  economy: numeric("economy", { precision: 5, scale: 2 }),
+  highScore: integer("high_score"),
+  bestBowling: text("best_bowling"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

@@ -1,0 +1,114 @@
+IPL Historical Player Database
+
+Create a dedicated database that stores player information separately for every IPL season.
+
+A player's record must not be overwritten when they change teams.
+
+Instead, maintain season-wise history.
+
+Example:
+
+Virat Kohli
+
+2014:
+Team = RCB
+Runs = xxx
+
+2015:
+Team = RCB
+Runs = xxx
+
+...
+
+2025:
+Team = RCB
+Runs = xxx
+
+Similarly:
+
+KL Rahul
+
+2014:
+SRH
+
+2015:
+SRH
+
+2016:
+RCB
+
+2018:
+PBKS
+
+2022:
+LSG
+
+etc.
+
+The system must maintain complete season-wise player history.
+
+Database structure should support:
+
+Players Table
+- player_id
+- name
+- nationality
+- role
+- batting_style
+- bowling_style
+- date_of_birth
+- image_url
+
+Player_Season Table
+- season
+- player_id
+- team
+- auction_price
+- retained
+- matches
+- runs
+- wickets
+- strike_rate
+- economy
+- catches
+- stumpings
+
+Season_Squads Table
+- season
+- franchise
+- player_id
+
+This allows the application to accurately recreate any IPL season.
+
+Example:
+
+User selects 2022.
+
+The system loads the actual IPL 2022 squads from the database.
+
+If the user wants to conduct the IPL 2023 auction:
+
+1. Load all IPL 2022 squads.
+2. Allow each franchise to retain players.
+3. Move released players into the auction pool.
+4. Include unsold players from previous auctions.
+5. Include new registered players for 2023.
+6. Generate the IPL 2023 auction pool dynamically.
+
+Similarly:
+
+Select 2018
+→ Load 2018 squads
+→ Retentions
+→ Generate 2019 auction
+
+Select 2024
+→ Load 2024 squads
+→ Retentions
+→ Generate 2025 auction
+
+The player database must act as the source of truth for all seasons.
+
+The application should be able to recreate any IPL auction from 2014 onwards using stored season-wise player data.
+
+Additionally, create automated scripts that can import and update player/squad data from publicly available IPL datasets, Cricbuzz, ESPN Cricinfo, Kaggle datasets, or cricket APIs so future seasons can be added easily without changing application code.
