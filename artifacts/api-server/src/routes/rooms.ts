@@ -2,7 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import {
   roomsTable, roomMembersTable, teamsTable, teamOwnersTable,
-  franchisesTable, auctionPoolTable, playersTable, playerSeasonsTable
+  franchisesTable, auctionPoolTable, playersTable, playerSeasonsTable,
+  seasonSquadsTable
 } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { getSocketServer } from "../lib/socket";
@@ -31,13 +32,18 @@ function formatRoom(room: RoomRow) {
     maxOwnersPerTeam: room.maxOwnersPerTeam,
     auctionSpeed: room.auctionSpeed,
     currentPlayerIndex: room.currentPlayerIndex,
+    rtmEnabled: room.rtmEnabled,
+    maxRetentions: room.maxRetentions,
+    rtmPendingTeamId: room.rtmPendingTeamId,
+    rtmBidAmountCrore: room.rtmBidAmountCrore ? parseFloat(room.rtmBidAmountCrore as string) : null,
+    rtmBidderTeamId: room.rtmBidderTeamId,
     createdAt: room.createdAt.toISOString(),
   };
 }
 
 // POST /api/rooms
 router.post("/", async (req: Request, res: Response): Promise<void> => {
-  const { name, seasonYear, auctionType, budgetCrore, maxSquadSize, maxOverseas, maxOwnersPerTeam, auctionSpeed, hostUserId, displayName } = req.body;
+  const { name, seasonYear, auctionType, budgetCrore, maxSquadSize, maxOverseas, maxOwnersPerTeam, auctionSpeed, hostUserId, displayName, rtmEnabled, maxRetentions } = req.body;
   if (!name || !seasonYear || !auctionType || !budgetCrore || !hostUserId) {
     res.status(400).json({ error: "Missing required fields" });
     return;
@@ -57,7 +63,10 @@ router.post("/", async (req: Request, res: Response): Promise<void> => {
     maxOwnersPerTeam: parseInt(maxOwnersPerTeam) || 2,
     auctionSpeed: auctionSpeed || "normal",
     currentPlayerIndex: 0,
+    rtmEnabled: rtmEnabled !== undefined ? Boolean(rtmEnabled) : true,
+    maxRetentions: maxRetentions !== undefined ? parseInt(maxRetentions) : 6,
   }).returning();
+
 
   await db.insert(roomMembersTable).values({
     roomId: room.id,
@@ -234,30 +243,72 @@ router.get("/:code/summary", async (req: Request<{ code: string }>, res: Respons
 });
 
 async function buildAuctionPool(roomId: number, seasonYear: number): Promise<void> {
-  const existing = await db.select().from(auctionPoolTable).where(eq(auctionPoolTable.roomId, roomId)).limit(1);
-  if (existing.length) return;
+  // Check if we already have non-retained available players in the pool
+  const nonRetainedExisting = await db.select().from(auctionPoolTable)
+    .where(and(eq(auctionPoolTable.roomId, roomId), eq(auctionPoolTable.isRetained, false)))
+    .limit(1);
+  if (nonRetainedExisting.length) return;
 
+  // Retrieve retained players for this room
   const retained = await db.select().from(auctionPoolTable)
     .where(and(eq(auctionPoolTable.roomId, roomId), eq(auctionPoolTable.isRetained, true)));
-  const retainedPlayerIds = retained.map((r) => r.playerId);
+  const retainedPlayerIds = new Set(retained.map((r) => r.playerId));
 
-  const seasonPlayers = await db.select({
-    playerId: playersTable.id,
+  const nextSeasonYear = seasonYear + 1;
+
+  // 1. Get released players from seasonYear squads (in seasonSquadsTable)
+  const currentSquadPlayers = await db.select({
+    playerId: seasonSquadsTable.playerId,
+  })
+    .from(seasonSquadsTable)
+    .where(eq(seasonSquadsTable.season, seasonYear));
+  const currentSquadPlayerIds = currentSquadPlayers.map(p => p.playerId);
+
+  // 2. Get registered players for nextSeasonYear
+  const allPlayerSeasons = await db.select({
+    playerId: playerSeasonsTable.playerId,
     basePriceCrore: playerSeasonsTable.basePriceCrore,
   })
-    .from(playersTable)
-    .innerJoin(playerSeasonsTable, and(
-      eq(playerSeasonsTable.playerId, playersTable.id),
-      eq(playerSeasonsTable.seasonYear, seasonYear)
-    ));
+    .from(playerSeasonsTable)
+    .where(eq(playerSeasonsTable.seasonYear, nextSeasonYear));
+
+  // Fallback to current seasonYear if next year isn't loaded/seeded yet
+  let poolSource = allPlayerSeasons;
+  if (poolSource.length === 0) {
+    poolSource = await db.select({
+      playerId: playerSeasonsTable.playerId,
+      basePriceCrore: playerSeasonsTable.basePriceCrore,
+    })
+      .from(playerSeasonsTable)
+      .where(eq(playerSeasonsTable.seasonYear, seasonYear));
+  }
+
+  // Deduplicate and filter out retained players
+  const uniquePlayers = new Map<number, string>();
+  for (const p of poolSource) {
+    if (!retainedPlayerIds.has(p.playerId)) {
+      uniquePlayers.set(p.playerId, p.basePriceCrore);
+    }
+  }
+
+  // Ensure any player from starting squads who wasn't retained is in the pool
+  for (const playerId of currentSquadPlayerIds) {
+    if (!retainedPlayerIds.has(playerId) && !uniquePlayers.has(playerId)) {
+      const basePriceRow = await db.select({ basePriceCrore: playerSeasonsTable.basePriceCrore })
+        .from(playerSeasonsTable)
+        .where(and(eq(playerSeasonsTable.playerId, playerId), eq(playerSeasonsTable.seasonYear, seasonYear)))
+        .limit(1);
+      const price = basePriceRow[0]?.basePriceCrore ?? "1.00";
+      uniquePlayers.set(playerId, price);
+    }
+  }
 
   let order = 0;
-  for (const sp of seasonPlayers) {
-    if (retainedPlayerIds.includes(sp.playerId)) continue;
+  for (const [playerId, basePriceCrore] of uniquePlayers.entries()) {
     await db.insert(auctionPoolTable).values({
       roomId,
-      playerId: sp.playerId,
-      basePriceCrore: sp.basePriceCrore,
+      playerId,
+      basePriceCrore,
       status: "available",
       isRetained: false,
       auctionOrder: order++,

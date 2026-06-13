@@ -8,21 +8,14 @@ import {
   useStartAuction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/react";
+import { useAppUser } from "@/hooks/useAppAuth";
 import { useSocket } from "@/hooks/use-socket";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, ChevronRight, Shield, Info, ChevronDown } from "lucide-react";
+import { Check, ChevronRight, Shield, Info, ChevronDown, Trophy, Users, Calculator } from "lucide-react";
 
-// ─── Official IPL 2025 retention rules ────────────────────────────────────────
-// Capped retentions: slots 1,2,3 then if also retaining more the cost resets
-// Uncapped: ₹4 Cr each (max 2)
-// Total max: 6 (any combination)
-// Starting purse: ₹120 Cr
-
-const MAX_RETENTIONS = 6;
-const MAX_UNCAPPED_RETENTIONS = 2;
-const CAPPED_RETENTION_COSTS = [18, 14, 11, 18, 14, 11]; // repeating pattern
+// Official/Custom IPL retention rules helper
+const CAPPED_RETENTION_COSTS = [18, 14, 11, 18, 14, 11, 11, 11, 11, 11]; // repeating/fallback pattern
 const UNCAPPED_COST = 4;
 
 function getRetentionCost(idx: number, isCapped: boolean): number {
@@ -64,7 +57,7 @@ function roleColor(role: string) {
 export default function RoomPrepare() {
   const params = useParams();
   const code = params.code as string;
-  const { user } = useUser();
+  const { user } = useAppUser();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -97,6 +90,9 @@ export default function RoomPrepare() {
   const startAuction = useStartAuction();
   const isHost = room?.hostUserId === user?.id;
 
+  const maxRetentionsLimit = room?.maxRetentions ?? 6;
+  const maxUncappedRetentions = 2;
+
   useEffect(() => {
     if (!socket) return;
     const onStatusChanged = ({ status }: { status: string }) => {
@@ -110,9 +106,9 @@ export default function RoomPrepare() {
     setSelectedIds((prev) => {
       if (prev.includes(player.id)) return prev.filter((id) => id !== player.id);
 
-      // Check max retentions
-      if (prev.length >= MAX_RETENTIONS) {
-        toast({ title: `Max ${MAX_RETENTIONS} retentions allowed under official IPL rules` });
+      // Check custom max retentions limit
+      if (prev.length >= maxRetentionsLimit) {
+        toast({ title: `Max ${maxRetentionsLimit} retentions allowed in this room` });
         return prev;
       }
 
@@ -122,8 +118,8 @@ export default function RoomPrepare() {
           const p = seasonPlayers?.find((sp) => sp.id === id);
           return !(p?.isCapped ?? true);
         }).length;
-        if (uncappedCount >= MAX_UNCAPPED_RETENTIONS) {
-          toast({ title: `Max ${MAX_UNCAPPED_RETENTIONS} uncapped players can be retained` });
+        if (uncappedCount >= maxUncappedRetentions) {
+          toast({ title: `Max ${maxUncappedRetentions} uncapped players can be retained` });
           return prev;
         }
       }
@@ -174,63 +170,74 @@ export default function RoomPrepare() {
 
   if (roomLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-broadcast">
         <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="px-6 py-4 border-b border-border/40 bg-background/95 backdrop-blur sticky top-0 z-10 flex items-center justify-between">
+    <div className="min-h-screen bg-broadcast text-foreground flex flex-col">
+      <header className="px-6 py-4 border-b border-white/5 bg-black/20 backdrop-blur sticky top-0 z-10 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">{room?.name ?? "Auction Room"}</h1>
-          <p className="text-xs text-muted-foreground">
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-amber-400" />
+            {room?.name ?? "Auction Room"}
+          </h1>
+          <p className="text-xs text-slate-400">
             Retention Phase · IPL {room?.seasonYear} Squads → {(room?.seasonYear ?? 2025) + 1} Auction
           </p>
         </div>
         {isHost && (
-          <Button onClick={handleBeginAuction} disabled={startAuction.isPending}>
+          <Button 
+            onClick={handleBeginAuction} 
+            disabled={startAuction.isPending}
+            className="bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold px-6 shadow-lg hover:opacity-90 transition-all glow-green"
+          >
             {startAuction.isPending ? "Starting..." : "Begin Live Auction →"}
           </Button>
         )}
       </header>
 
-      <main className="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-4">
+      <main className="flex-1 max-w-7xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 w-full relative z-10">
+        <div className="lg:col-span-2 space-y-6">
 
           {/* Retention rules toggle */}
           <button
-            className="w-full flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl text-left"
+            className="w-full flex items-center justify-between p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-left hover:bg-blue-500/15 transition-all"
             onClick={() => setShowRules(!showRules)}
           >
             <div className="flex items-center gap-2 text-blue-300">
-              <Info className="w-4 h-4 shrink-0" />
-              <span className="text-sm font-semibold">Official IPL Retention Rules</span>
+              <Info className="w-4 h-4 shrink-0 text-blue-400" />
+              <span className="text-sm font-semibold">Official IPL Retention & Purse Rules</span>
             </div>
             <ChevronDown className={`w-4 h-4 text-blue-400 transition-transform ${showRules ? "rotate-180" : ""}`} />
           </button>
 
           {showRules && (
-            <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4 text-sm space-y-3">
-              <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+            <div className="glass-panel border-blue-500/20 rounded-xl p-6 text-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <p className="font-semibold text-blue-200 mb-1">Capped Player Costs</p>
-                  {[1, 2, 3, 4, 5, 6].map((n, i) => (
-                    <div key={n} className="flex justify-between text-muted-foreground">
-                      <span>Retention #{n}</span>
-                      <span className="text-foreground">₹{CAPPED_RETENTION_COSTS[i]} Cr</span>
-                    </div>
-                  ))}
+                  <p className="font-semibold text-blue-200 mb-2 flex items-center gap-1.5">
+                    <Calculator className="w-4 h-4" />
+                    Capped Player Cost Curve
+                  </p>
+                  <div className="space-y-1 bg-black/20 p-3 rounded-lg border border-white/5">
+                    {[1, 2, 3, 4, 5, 6].map((n, i) => (
+                      <div key={n} className="flex justify-between text-slate-300">
+                        <span>Retention #{n}</span>
+                        <span className="text-white font-mono font-semibold">₹{CAPPED_RETENTION_COSTS[i]} Cr</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div>
-                  <p className="font-semibold text-blue-200 mb-1">Rules Summary</p>
-                  <ul className="space-y-1 text-muted-foreground">
-                    <li>Max <strong className="text-foreground">6</strong> retentions total</li>
-                    <li>Max <strong className="text-foreground">2</strong> uncapped players (₹4 Cr each)</li>
-                    <li>Starting purse: <strong className="text-foreground">₹{startingBudget} Cr</strong></li>
-                    <li>Released players enter auction pool</li>
-                    <li>New players also enter the pool</li>
+                  <p className="font-semibold text-blue-200 mb-2">Rules Summary</p>
+                  <ul className="space-y-2 text-slate-300 list-disc pl-4">
+                    <li>Max <strong className="text-white">{maxRetentionsLimit}</strong> retentions allowed total</li>
+                    <li>Max <strong className="text-white">{maxUncappedRetentions}</strong> uncapped players (₹4 Cr each)</li>
+                    <li>Starting budget: <strong className="text-white">₹{startingBudget} Cr</strong></li>
+                    <li>Released database players automatically populate the live bidding pool</li>
                   </ul>
                 </div>
               </div>
@@ -238,57 +245,58 @@ export default function RoomPrepare() {
           )}
 
           {!myTeam ? (
-            <div className="flex flex-col items-center justify-center min-h-[400px] bg-card border border-border rounded-xl p-8 text-center">
-              <Shield className="w-12 h-12 text-muted-foreground mb-4" />
-              <h3 className="text-xl font-semibold mb-2">No Franchise Selected</h3>
-              <p className="text-muted-foreground">You can still watch the auction. Retained players will be shown when the auction begins.</p>
+            <div className="flex flex-col items-center justify-center min-h-[400px] glass-panel border-white/10 rounded-2xl p-8 text-center space-y-4">
+              <Shield className="w-16 h-16 text-slate-500 animate-pulse" />
+              <h3 className="text-xl font-bold text-white">No Franchise Selected</h3>
+              <p className="text-slate-400 max-w-sm">You are watching the prep room. Select a franchise or wait for the host to start the Live Auction.</p>
             </div>
           ) : (
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <div className="glass-panel border-white/10 rounded-2xl overflow-hidden shadow-2xl">
               {/* Franchise header */}
               <div
-                className="px-6 py-4 flex items-center justify-between"
-                style={{ background: `linear-gradient(135deg, ${myTeam.primaryColor}25, transparent)`, borderBottom: `1px solid ${myTeam.primaryColor}30` }}
+                className="px-6 py-5 flex items-center justify-between"
+                style={{ background: `linear-gradient(135deg, ${myTeam.primaryColor}20, transparent)`, borderBottom: `1px solid ${myTeam.primaryColor}25` }}
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center font-black text-white text-sm"
-                    style={{ backgroundColor: myTeam.primaryColor }}
+                    className="w-12 h-12 rounded-full flex items-center justify-center font-black text-white text-base shadow-lg"
+                    style={{ backgroundColor: myTeam.primaryColor, textShadow: "0 2px 4px rgba(0,0,0,0.3)" }}
                   >
-                    {myTeam.shortName.slice(0, 2)}
+                    {myTeam.shortName.slice(0, 3)}
                   </div>
                   <div>
-                    <p className="font-bold">{myTeam.franchiseName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      ₹{remainingAfterRetentions.toFixed(1)} Cr after retentions · {selectedIds.length}/{MAX_RETENTIONS} retained
+                    <p className="font-extrabold text-lg text-white">{myTeam.franchiseName}</p>
+                    <p className="text-xs text-slate-300 font-medium">
+                      ₹{remainingAfterRetentions.toFixed(1)} Cr Left · {selectedIds.length}/{maxRetentionsLimit} Retained
                     </p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-muted-foreground">Purse deduction</p>
-                  <p className="text-lg font-bold text-red-400">−₹{totalDeduction} Cr</p>
+                  <p className="text-xs text-slate-400">Locked-in Purse</p>
+                  <p className="text-xl font-black text-glow-red text-rose-500">−₹{totalDeduction} Cr</p>
                 </div>
               </div>
 
               {myTeam.retentionComplete ? (
-                <div className="p-8 text-center">
-                  <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <Check className="w-6 h-6 text-green-400" />
+                <div className="p-12 text-center space-y-4 bg-black/10">
+                  <div className="w-16 h-16 bg-green-500/10 border border-green-500/30 rounded-full flex items-center justify-center mx-auto shadow-lg shadow-green-500/5 animate-bounce">
+                    <Check className="w-8 h-8 text-green-400" />
                   </div>
-                  <h3 className="font-semibold text-lg mb-1">Retentions Submitted!</h3>
-                  <p className="text-muted-foreground text-sm">
-                    {selectedIds.length} player(s) retained · ₹{totalDeduction} Cr deducted
-                  </p>
-                  <p className="text-muted-foreground text-sm mt-1">Waiting for host to begin the auction.</p>
+                  <h3 className="font-extrabold text-xl text-white">Retentions Submitted!</h3>
+                  <div className="text-sm text-slate-300 max-w-md mx-auto space-y-1">
+                    <p>{selectedIds.length} player(s) secured for season squad.</p>
+                    <p className="text-amber-400 font-semibold font-mono">₹{remainingAfterRetentions.toFixed(1)} Cr purse remains for live auction.</p>
+                  </div>
+                  <p className="text-xs text-slate-500 pt-2">Waiting for the coordinator/host to begin live bidding.</p>
                 </div>
               ) : (
                 <>
                   {(seasonPlayers ?? []).length === 0 ? (
-                    <div className="p-8 text-center text-muted-foreground">
-                      No squad data found. All players will enter the auction pool.
+                    <div className="p-12 text-center text-slate-400 bg-black/10 font-medium">
+                      No roster files detected for {myTeam.franchiseName} in IPL {room?.seasonYear}. <br />All matching players will go to the auction.
                     </div>
                   ) : (
-                    <div className="divide-y divide-border/40">
+                    <div className="divide-y divide-white/5 bg-black/15 max-h-[600px] overflow-y-auto">
                       {(seasonPlayers ?? []).map((player) => {
                         const isSelected = selectedIds.includes(player.id);
                         const retentionIdx = selectedIds.indexOf(player.id);
@@ -299,41 +307,46 @@ export default function RoomPrepare() {
                           <div
                             key={player.id}
                             onClick={() => togglePlayer(player)}
-                            className={`flex items-start gap-4 px-6 py-3.5 cursor-pointer transition-colors group
-                              ${isSelected ? "bg-primary/8 hover:bg-primary/12" : "hover:bg-muted/30"}`}
+                            className={`flex items-start gap-4 px-6 py-4 cursor-pointer transition-all duration-150 group
+                              ${isSelected ? "bg-white/5 border-l-4" : "hover:bg-white/[0.03] border-l-4 border-l-transparent"}`}
+                            style={{ borderLeftColor: isSelected ? myTeam.primaryColor : undefined }}
                           >
                             {/* Checkbox */}
-                            <div className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-colors
-                              ${isSelected ? "border-primary bg-primary" : "border-muted-foreground/50 group-hover:border-muted-foreground"}`}
+                            <div className={`mt-1.5 w-5 h-5 rounded border flex items-center justify-center shrink-0 transition-all
+                              ${isSelected ? "border-amber-400 bg-amber-400" : "border-slate-600 group-hover:border-slate-400"}`}
                             >
-                              {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                              {isSelected && <Check className="w-3.5 h-3.5 text-black font-black" />}
                             </div>
 
-                            {/* Role indicator */}
-                            <div className="w-1 self-stretch rounded-full shrink-0" style={{ backgroundColor: `${rc}60` }} />
+                            {/* Color Tag */}
+                            <div className="w-1.5 h-10 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: rc }} />
 
                             {/* Info */}
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-semibold">{player.name}</span>
+                                <span className="font-bold text-white text-base group-hover:text-amber-400 transition-colors">{player.name}</span>
                                 {!(player.isCapped ?? true) && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-muted rounded text-muted-foreground">Uncapped</span>
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 bg-slate-800 rounded text-slate-400 uppercase tracking-wider">Uncapped</span>
                                 )}
                                 {player.isOverseas && (
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-500 rounded">Overseas</span>
+                                  <span className="text-[10px] font-semibold px-2 py-0.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded uppercase tracking-wider">Overseas</span>
                                 )}
                               </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                              <div className="flex items-center gap-2 text-xs text-slate-400 mt-1 flex-wrap font-medium">
                                 <span style={{ color: rc }}>{player.role}</span>
                                 <span>·</span>
                                 <span>{player.nationality}</span>
                                 {player.age && <><span>·</span><span>Age {player.age}</span></>}
-                                {player.matchesPlayed && (
+                                {player.runs != null && player.runs > 0 && (
                                   <>
                                     <span>·</span>
-                                    <span>{player.matchesPlayed}M</span>
-                                    {player.runs != null && <span>{player.runs} runs</span>}
-                                    {player.wickets != null && <span>{player.wickets} wkts</span>}
+                                    <span>{player.runs} Runs</span>
+                                  </>
+                                )}
+                                {player.wickets != null && player.wickets > 0 && (
+                                  <>
+                                    <span>·</span>
+                                    <span>{player.wickets} Wkts</span>
                                   </>
                                 )}
                               </div>
@@ -342,12 +355,12 @@ export default function RoomPrepare() {
                             {/* Retention cost */}
                             <div className="text-right shrink-0">
                               {isSelected && retentionCost !== null ? (
-                                <span className="text-sm font-bold text-red-400">−₹{retentionCost} Cr</span>
+                                <span className="text-sm font-black text-rose-400 font-mono">−₹{retentionCost} Cr</span>
                               ) : (
-                                <span className="text-xs text-muted-foreground">₹{player.basePriceCrore} Cr base</span>
+                                <span className="text-xs text-slate-400 font-mono">₹{player.basePriceCrore} Cr base</span>
                               )}
                               {isSelected && (
-                                <div className="text-[10px] text-muted-foreground">Slot #{retentionIdx + 1}</div>
+                                <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Slot #{retentionIdx + 1}</div>
                               )}
                             </div>
                           </div>
@@ -357,22 +370,21 @@ export default function RoomPrepare() {
                   )}
 
                   {/* Submit bar */}
-                  <div className="px-6 py-4 border-t border-border/50 flex items-center justify-between bg-muted/10">
+                  <div className="px-6 py-5 border-t border-white/5 flex items-center justify-between bg-black/30">
                     <div>
-                      <p className="text-sm font-medium">
+                      <p className="text-sm font-bold text-white">
                         {selectedIds.length === 0
-                          ? "No players retained — full squad enters auction pool"
-                          : `${selectedIds.length} retained · ₹${totalDeduction} Cr deducted`}
+                          ? "No retentions selected — entire squad enters pool"
+                          : `${selectedIds.length} secured · ₹${totalDeduction} Cr locked`}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-slate-400">
                         Remaining purse: ₹{remainingAfterRetentions.toFixed(1)} Cr
                       </p>
                     </div>
                     <Button
                       onClick={handleSubmitRetentions}
                       disabled={retainPlayers.isPending}
-                      size="sm"
-                      className="shrink-0"
+                      className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold px-5 py-2 shadow-md hover:opacity-90 transition-all glow-gold"
                     >
                       <ChevronRight className="w-4 h-4 mr-1" />
                       {retainPlayers.isPending ? "Submitting..." : "Lock In Retentions"}
@@ -385,50 +397,56 @@ export default function RoomPrepare() {
         </div>
 
         {/* Sidebar */}
-        <div className="space-y-4">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <h2 className="font-semibold mb-3">Team Status</h2>
-            <div className="space-y-2">
+        <div className="space-y-6">
+          <div className="glass-panel border-white/10 rounded-2xl p-5 shadow-xl">
+            <h2 className="font-extrabold text-white text-base mb-4 flex items-center gap-2">
+              <Users className="w-4 h-4 text-amber-500" />
+              Room Members
+            </h2>
+            <div className="space-y-3">
               {(roomTeams ?? []).map((team) => (
-                <div key={team.id} className="flex items-center justify-between p-2.5 bg-muted/30 rounded-lg text-sm">
+                <div key={team.id} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/[0.03]">
                   <div className="flex items-center gap-2">
                     <div
-                      className="w-6 h-6 rounded-full flex items-center justify-center font-bold text-white text-[10px]"
+                      className="w-7 h-7 rounded-full flex items-center justify-center font-black text-white text-xs shadow"
                       style={{ backgroundColor: team.primaryColor }}
                     >
-                      {team.shortName.slice(0, 2)}
+                      {team.shortName.slice(0, 3)}
                     </div>
-                    <span className="font-medium">{team.shortName}</span>
+                    <span className="font-bold text-white text-sm">{team.franchiseName}</span>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium
-                    ${team.retentionComplete ? "bg-green-500/20 text-green-400" : "bg-yellow-500/20 text-yellow-400"}`}>
-                    {team.retentionComplete ? "✓ Done" : "Pending"}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider
+                    ${team.retentionComplete ? "bg-green-500/15 text-green-400 border-green-500/25" : "bg-amber-500/15 text-amber-400 border-amber-500/25"}`}>
+                    {team.retentionComplete ? "✓ Done" : "Drafting"}
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-card border border-border rounded-xl p-4 text-sm">
-            <h3 className="font-semibold mb-3">Retention Cost Guide</h3>
-            <div className="space-y-1.5">
+          <div className="glass-panel border-white/10 rounded-2xl p-5 text-sm space-y-4">
+            <h3 className="font-bold text-white text-base">Retention Price Guide</h3>
+            <div className="space-y-2">
               {[1, 2, 3, 4, 5, 6].map((n, i) => (
-                <div key={n} className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Capped #{n}</span>
-                  <span className="font-semibold">₹{CAPPED_RETENTION_COSTS[i]} Cr</span>
+                <div key={n} className="flex justify-between items-center text-slate-300">
+                  <span>Capped Securing Slot #{n}</span>
+                  <span className="font-bold text-white font-mono">₹{CAPPED_RETENTION_COSTS[i]} Cr</span>
                 </div>
               ))}
-              <div className="border-t border-border/50 pt-1.5 flex justify-between items-center">
-                <span className="text-muted-foreground">Uncapped (max 2)</span>
-                <span className="font-semibold">₹{UNCAPPED_COST} Cr</span>
+              <div className="border-t border-white/5 pt-2 flex justify-between items-center text-slate-300">
+                <span>Uncapped Securing (Max 2)</span>
+                <span className="font-bold text-white font-mono">₹{UNCAPPED_COST} Cr</span>
               </div>
             </div>
           </div>
 
           {isHost && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 text-sm text-blue-300">
-              <p className="font-semibold text-blue-200 mb-1">Host: Begin Auction</p>
-              <p>Click "Begin Live Auction" when all teams are done with retentions. Released players enter the auction pool automatically.</p>
+            <div className="bg-amber-500/5 border border-amber-500/20 rounded-2xl p-5 text-sm text-amber-300 space-y-1">
+              <p className="font-bold text-white flex items-center gap-1.5">
+                <Shield className="w-4 h-4 text-amber-500" />
+                Host Control Room
+              </p>
+              <p className="text-slate-400">Click "Begin Live Auction" at the top once your friends have completed their lists. All remaining players will enter the bidding pool.</p>
             </div>
           )}
         </div>

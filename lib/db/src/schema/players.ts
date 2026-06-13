@@ -1,6 +1,7 @@
 import { pgTable, serial, text, integer, boolean, numeric, timestamp } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { franchisesTable } from "./franchises";
 
 export const playersTable = pgTable("players", {
   id: serial("id").primaryKey(),
@@ -12,6 +13,8 @@ export const playersTable = pgTable("players", {
   battingStyle: text("batting_style"),
   bowlingStyle: text("bowling_style"),
   age: integer("age"),
+  dateOfBirth: text("date_of_birth"),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -38,6 +41,13 @@ export const playerSeasonsTable = pgTable("player_seasons", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const seasonSquadsTable = pgTable("season_squads", {
+  id: serial("id").primaryKey(),
+  season: integer("season").notNull(),
+  franchiseId: integer("franchise_id").notNull().references(() => franchisesTable.id),
+  playerId: integer("player_id").notNull().references(() => playersTable.id),
+});
+
 export const insertPlayerSchema = createInsertSchema(playersTable).omit({ id: true, createdAt: true });
 export type InsertPlayer = z.infer<typeof insertPlayerSchema>;
 export type Player = typeof playersTable.$inferSelect;
@@ -45,3 +55,8 @@ export type Player = typeof playersTable.$inferSelect;
 export const insertPlayerSeasonSchema = createInsertSchema(playerSeasonsTable).omit({ id: true, createdAt: true });
 export type InsertPlayerSeason = z.infer<typeof insertPlayerSeasonSchema>;
 export type PlayerSeason = typeof playerSeasonsTable.$inferSelect;
+
+export const insertSeasonSquadSchema = createInsertSchema(seasonSquadsTable).omit({ id: true });
+export type InsertSeasonSquad = z.infer<typeof insertSeasonSquadSchema>;
+export type SeasonSquad = typeof seasonSquadsTable.$inferSelect;
+

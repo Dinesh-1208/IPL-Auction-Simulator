@@ -2,7 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import {
   roomsTable, teamsTable, franchisesTable,
-  auctionPoolTable, bidsTable, playersTable, playerSeasonsTable, messagesTable
+  auctionPoolTable, bidsTable, playersTable, playerSeasonsTable, messagesTable,
+  purchasesTable, retentionsTable, seasonSquadsTable
 } from "@workspace/db";
 import { eq, and, asc, desc } from "drizzle-orm";
 import { getSocketServer } from "../lib/socket";
@@ -166,6 +167,41 @@ router.get("/current", async (req: Request<{ code: string }>, res: Response): Pr
   const currentEntry = available[0];
   const playerCard = await buildPlayerCard(currentEntry);
 
+
+  if (room.rtmPendingTeamId) {
+    let currentBidderTeamName: string | null = null;
+    if (room.rtmBidderTeamId) {
+      const teamData = await db.select({ franchiseId: teamsTable.franchiseId })
+        .from(teamsTable).where(eq(teamsTable.id, room.rtmBidderTeamId)).limit(1);
+      if (teamData[0]) {
+        const f = await db.select().from(franchisesTable).where(eq(franchisesTable.id, teamData[0].franchiseId)).limit(1);
+        currentBidderTeamName = f[0]?.name ?? null;
+      }
+    }
+
+    let rtmPendingTeamName: string | null = null;
+    const rtmTeamData = await db.select({ franchiseId: teamsTable.franchiseId })
+      .from(teamsTable).where(eq(teamsTable.id, room.rtmPendingTeamId)).limit(1);
+    if (rtmTeamData[0]) {
+      const f = await db.select().from(franchisesTable).where(eq(franchisesTable.id, rtmTeamData[0].franchiseId)).limit(1);
+      rtmPendingTeamName = f[0]?.name ?? null;
+    }
+
+    res.json({
+      currentPlayer: playerCard,
+      currentBidCrore: room.rtmBidAmountCrore ? parseFloat(room.rtmBidAmountCrore as string) : playerCard.basePriceCrore,
+      currentBidderTeamId: room.rtmBidderTeamId,
+      currentBidderTeamName,
+      rtmPendingTeamId: room.rtmPendingTeamId,
+      rtmPendingTeamName,
+      timerSeconds: 30,
+      status: "rtm",
+      totalPlayersAuctioned: auctioned,
+      totalPlayersRemaining: remaining,
+    });
+    return;
+  }
+
   const latestBid = await db.select({
     teamId: bidsTable.teamId,
     bidAmountCrore: bidsTable.bidAmountCrore,
@@ -304,11 +340,81 @@ router.post("/sold", async (req: Request<{ code: string }>, res: Response): Prom
   const winnerTeamId = latestBid[0].teamId;
   const soldPrice = parseFloat(latestBid[0].bidAmountCrore as string);
 
+  // Check RTM eligibility
+  if (room.rtmEnabled) {
+    const prevSquadEntry = await db.select().from(seasonSquadsTable)
+      .where(and(
+        eq(seasonSquadsTable.season, room.seasonYear),
+        eq(seasonSquadsTable.playerId, currentEntry.playerId)
+      ))
+      .limit(1);
+
+    if (prevSquadEntry.length) {
+      const prevTeam = await db.select().from(teamsTable)
+        .where(and(
+          eq(teamsTable.roomId, room.id),
+          eq(teamsTable.franchiseId, prevSquadEntry[0].franchiseId)
+        ))
+        .limit(1);
+
+      if (prevTeam.length) {
+        const prevTeamId = prevTeam[0].id;
+        const budgetRemaining = parseFloat(prevTeam[0].budgetRemainingCrore as string);
+
+        const purchasesCount = await db.select().from(purchasesTable).where(and(eq(purchasesTable.roomId, room.id), eq(purchasesTable.teamId, prevTeamId)));
+        const retentionsCount = await db.select().from(retentionsTable).where(and(eq(retentionsTable.roomId, room.id), eq(retentionsTable.teamId, prevTeamId)));
+        const squadSize = purchasesCount.length + retentionsCount.length;
+
+        if (winnerTeamId !== prevTeamId && budgetRemaining >= soldPrice && squadSize < room.maxSquadSize) {
+          // Trigger RTM pending state
+          await db.update(roomsTable).set({
+            rtmPendingTeamId: prevTeamId,
+            rtmBidAmountCrore: soldPrice.toString(),
+            rtmBidderTeamId: winnerTeamId,
+          }).where(eq(roomsTable.id, room.id));
+
+          const io = getSocketServer();
+          if (io) {
+            io.to(req.params.code).emit("auction:rtm_prompt", {
+              playerId: currentEntry.playerId,
+              rtmPendingTeamId: prevTeamId,
+              bidAmountCrore: soldPrice,
+              bidderTeamId: winnerTeamId,
+            });
+          }
+
+          const player = await db.select().from(playersTable).where(eq(playersTable.id, currentEntry.playerId)).limit(1);
+          const prevFranchise = await db.select().from(franchisesTable).where(eq(franchisesTable.id, prevTeam[0].franchiseId)).limit(1);
+          await db.insert(messagesTable).values({
+            roomId: room.id,
+            userId: "system",
+            displayName: "Auction",
+            content: `Right to Match (RTM) prompted for ${player[0]?.name ?? "Player"}. Former franchise ${prevFranchise[0]?.shortName ?? "Team"} has 30 seconds to match the bid of ${soldPrice} Cr.`,
+            isSystem: true,
+          });
+
+          const updatedRoom = await getAuctionRoom(req.params.code);
+          await sendAuctionState(req.params.code, updatedRoom ?? room, res);
+          return;
+        }
+      }
+    }
+  }
+
+  // Normal sale when RTM not applicable/enabled
   await db.update(auctionPoolTable).set({
     status: "sold",
     soldToTeamId: winnerTeamId,
     soldPriceCrore: soldPrice.toString(),
   }).where(eq(auctionPoolTable.id, currentEntry.id));
+
+  await db.insert(purchasesTable).values({
+    roomId: room.id,
+    teamId: winnerTeamId,
+    playerId: currentEntry.playerId,
+    soldPriceCrore: soldPrice.toString(),
+    isRtmMatched: false,
+  });
 
   const team = await db.select().from(teamsTable).where(eq(teamsTable.id, winnerTeamId)).limit(1);
   if (team.length) {
@@ -331,6 +437,7 @@ router.post("/sold", async (req: Request<{ code: string }>, res: Response): Prom
       teamId: winnerTeamId,
       teamName: franchise[0]?.name,
       soldPriceCrore: soldPrice,
+      isRtmMatched: false,
     });
   }
 
@@ -344,6 +451,100 @@ router.post("/sold", async (req: Request<{ code: string }>, res: Response): Prom
   });
 
   await sendAuctionState(req.params.code, room, res);
+});
+
+// POST /api/rooms/:code/auction/rtm
+router.post("/rtm", async (req: Request<{ code: string }>, res: Response): Promise<void> => {
+  const room = await getAuctionRoom(req.params.code);
+  if (!room) { res.status(404).json({ error: "Room not found" }); return; }
+  if (!room.rtmPendingTeamId) { res.status(400).json({ error: "No RTM decision pending" }); return; }
+
+  const { useRtm } = req.body as { useRtm?: boolean };
+  if (useRtm === undefined) { res.status(400).json({ error: "useRtm parameter is required" }); return; }
+
+  const available = await db.select().from(auctionPoolTable)
+    .where(and(eq(auctionPoolTable.roomId, room.id), eq(auctionPoolTable.status, "available")))
+    .orderBy(asc(auctionPoolTable.auctionOrder))
+    .limit(1);
+
+  if (!available.length) { res.status(400).json({ error: "No player to sell" }); return; }
+
+  const currentEntry = available[0];
+  const soldPrice = parseFloat(room.rtmBidAmountCrore as string);
+  const rtmTeamId = room.rtmPendingTeamId;
+  const bidderTeamId = room.rtmBidderTeamId!;
+
+  let finalBuyerTeamId = bidderTeamId;
+  let isRtmMatched = false;
+
+  if (useRtm) {
+    finalBuyerTeamId = rtmTeamId;
+    isRtmMatched = true;
+  }
+
+  // Finalize purchase
+  await db.update(auctionPoolTable).set({
+    status: "sold",
+    soldToTeamId: finalBuyerTeamId,
+    soldPriceCrore: soldPrice.toString(),
+  }).where(eq(auctionPoolTable.id, currentEntry.id));
+
+  // Insert purchase log
+  await db.insert(purchasesTable).values({
+    roomId: room.id,
+    teamId: finalBuyerTeamId,
+    playerId: currentEntry.playerId,
+    soldPriceCrore: soldPrice.toString(),
+    isRtmMatched,
+  });
+
+  // Update buyer budget
+  const team = await db.select().from(teamsTable).where(eq(teamsTable.id, finalBuyerTeamId)).limit(1);
+  if (team.length) {
+    const newBudgetRemaining = parseFloat(team[0].budgetRemainingCrore as string) - soldPrice;
+    const newBudgetSpent = parseFloat(team[0].budgetSpentCrore as string) + soldPrice;
+    await db.update(teamsTable).set({
+      budgetRemainingCrore: Math.max(0, newBudgetRemaining).toString(),
+      budgetSpentCrore: newBudgetSpent.toString(),
+    }).where(eq(teamsTable.id, finalBuyerTeamId));
+  }
+
+  // Clear RTM pending status on the room
+  await db.update(roomsTable).set({
+    rtmPendingTeamId: null,
+    rtmBidAmountCrore: null,
+    rtmBidderTeamId: null,
+  }).where(eq(roomsTable.id, room.id));
+
+  const franchise = team.length
+    ? await db.select().from(franchisesTable).where(eq(franchisesTable.id, team[0].franchiseId)).limit(1)
+    : [];
+
+  const player = await db.select().from(playersTable).where(eq(playersTable.id, currentEntry.playerId)).limit(1);
+
+  const io = getSocketServer();
+  if (io) {
+    io.to(req.params.code).emit("auction:sold", {
+      playerId: currentEntry.playerId,
+      teamId: finalBuyerTeamId,
+      teamName: franchise[0]?.name,
+      soldPriceCrore: soldPrice,
+      isRtmMatched,
+    });
+  }
+
+  await db.insert(messagesTable).values({
+    roomId: room.id,
+    userId: "system",
+    displayName: "Auction",
+    content: isRtmMatched
+      ? `${player[0]?.name ?? "Player"} SOLD to ${franchise[0]?.shortName ?? "Team"} via RTM for ${soldPrice} Cr!`
+      : `${player[0]?.name ?? "Player"} SOLD to ${franchise[0]?.shortName ?? "Team"} for ${soldPrice} Cr!`,
+    isSystem: true,
+  });
+
+  const freshRoom = await getAuctionRoom(req.params.code);
+  await sendAuctionState(req.params.code, freshRoom ?? room, res);
 });
 
 // POST /api/rooms/:code/auction/unsold
@@ -477,16 +678,61 @@ async function sendAuctionState(code: string, room: RoomRow, res: Response): Pro
   }
 
   const playerCard = await buildPlayerCard(available[0]);
+
+  if (room.rtmPendingTeamId) {
+    let currentBidderTeamName: string | null = null;
+    if (room.rtmBidderTeamId) {
+      const teamData = await db.select({ franchiseId: teamsTable.franchiseId })
+        .from(teamsTable).where(eq(teamsTable.id, room.rtmBidderTeamId)).limit(1);
+      if (teamData[0]) {
+        const f = await db.select().from(franchisesTable).where(eq(franchisesTable.id, teamData[0].franchiseId)).limit(1);
+        currentBidderTeamName = f[0]?.name ?? null;
+      }
+    }
+
+    let rtmPendingTeamName: string | null = null;
+    const rtmTeamData = await db.select({ franchiseId: teamsTable.franchiseId })
+      .from(teamsTable).where(eq(teamsTable.id, room.rtmPendingTeamId)).limit(1);
+    if (rtmTeamData[0]) {
+      const f = await db.select().from(franchisesTable).where(eq(franchisesTable.id, rtmTeamData[0].franchiseId)).limit(1);
+      rtmPendingTeamName = f[0]?.name ?? null;
+    }
+
+    res.json({
+      currentPlayer: playerCard,
+      currentBidCrore: room.rtmBidAmountCrore ? parseFloat(room.rtmBidAmountCrore as string) : playerCard.basePriceCrore,
+      currentBidderTeamId: room.rtmBidderTeamId,
+      currentBidderTeamName,
+      rtmPendingTeamId: room.rtmPendingTeamId,
+      rtmPendingTeamName,
+      timerSeconds: 30,
+      status: "rtm",
+      totalPlayersAuctioned: auctioned,
+      totalPlayersRemaining: remaining,
+    });
+    return;
+  }
+
   const latestBid = await db.select().from(bidsTable)
     .where(eq(bidsTable.auctionPoolId, available[0].id))
     .orderBy(desc(bidsTable.placedAt))
     .limit(1);
 
+  let currentBidderTeamName: string | null = null;
+  if (latestBid[0]) {
+    const teamData = await db.select({ franchiseId: teamsTable.franchiseId })
+      .from(teamsTable).where(eq(teamsTable.id, latestBid[0].teamId)).limit(1);
+    if (teamData[0]) {
+      const f = await db.select().from(franchisesTable).where(eq(franchisesTable.id, teamData[0].franchiseId)).limit(1);
+      currentBidderTeamName = f[0]?.name ?? null;
+    }
+  }
+
   res.json({
     currentPlayer: playerCard,
     currentBidCrore: latestBid[0] ? parseFloat(latestBid[0].bidAmountCrore as string) : playerCard.basePriceCrore,
     currentBidderTeamId: latestBid[0]?.teamId ?? null,
-    currentBidderTeamName: null,
+    currentBidderTeamName,
     timerSeconds: speedTimer[room.auctionSpeed] ?? 30,
     status: "bidding",
     totalPlayersAuctioned: auctioned,

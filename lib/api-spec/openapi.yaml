@@ -452,6 +452,35 @@ paths:
               schema:
                 $ref: "#/components/schemas/AuctionState"
 
+  /rooms/{code}/auction/rtm:
+    post:
+      operationId: makeRtmDecision
+      tags: [auction]
+      summary: Make Right-To-Match decision (former franchise owner only)
+      parameters:
+        - name: code
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                useRtm:
+                  type: boolean
+              required: [useRtm]
+      responses:
+        "200":
+          description: RTM decision processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuctionState"
+
   /rooms/{code}/auction/unsold:
     post:
       operationId: markPlayerUnsold
@@ -712,6 +741,12 @@ components:
         auctionSpeed:
           type: string
           enum: [fast, normal, slow]
+        rtmEnabled:
+          type: boolean
+          default: true
+        maxRetentions:
+          type: integer
+          default: 6
       required: [name, seasonYear, auctionType, budgetCrore, maxSquadSize, maxOverseas, maxOwnersPerTeam, auctionSpeed]
 
     Room:
@@ -744,6 +779,16 @@ components:
           type: string
         currentPlayerIndex:
           type: integer
+        rtmEnabled:
+          type: boolean
+        maxRetentions:
+          type: integer
+        rtmPendingTeamId:
+          type: ["integer", "null"]
+        rtmBidAmountCrore:
+          type: ["number", "null"]
+        rtmBidderTeamId:
+          type: ["integer", "null"]
         createdAt:
           type: string
       required: [id, code, name, hostUserId, seasonYear, auctionType, status, budgetCrore, maxSquadSize, maxOverseas, maxOwnersPerTeam, auctionSpeed, currentPlayerIndex, createdAt]
@@ -970,7 +1015,11 @@ components:
           type: integer
         status:
           type: string
-          enum: [idle, bidding, sold, unsold, completed]
+          enum: [idle, bidding, rtm, sold, unsold, completed]
+        rtmPendingTeamId:
+          type: ["integer", "null"]
+        rtmPendingTeamName:
+          type: ["string", "null"]
         totalPlayersAuctioned:
           type: integer
         totalPlayersRemaining:

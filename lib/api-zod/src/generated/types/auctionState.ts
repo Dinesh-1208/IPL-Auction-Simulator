@@ -17,6 +17,10 @@ export interface AuctionState {
   currentBidderTeamName?: string | null;
   timerSeconds: number;
   status: AuctionStateStatus;
+  /** @nullable */
+  rtmPendingTeamId?: number | null;
+  /** @nullable */
+  rtmPendingTeamName?: string | null;
   totalPlayersAuctioned: number;
   totalPlayersRemaining: number;
 }

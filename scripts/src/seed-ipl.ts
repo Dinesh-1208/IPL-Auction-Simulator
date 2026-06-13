@@ -1,5 +1,5 @@
 import { db } from "@workspace/db";
-import { franchisesTable, playersTable, playerSeasonsTable } from "@workspace/db";
+import { franchisesTable, playersTable, playerSeasonsTable, seasonSquadsTable } from "@workspace/db";
 
 // ─── Franchises ────────────────────────────────────────────────────────────────
 const franchises = [
@@ -16,7 +16,8 @@ const franchises = [
 ];
 
 // Season years to seed
-const SEASONS = [2019, 2020, 2021, 2022, 2023, 2024, 2025];
+const SEASONS = [2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025];
+
 
 type Stats = {
   matches: number;
@@ -965,13 +966,12 @@ async function seed() {
   }
 
   // ── Players ────────────────────────────────────────────────────────────────
+  console.log("▶ Cleaning existing player data...");
+  await db.delete(seasonSquadsTable);
+  await db.delete(playerSeasonsTable);
+  await db.delete(playersTable);
+
   console.log("▶ Seeding players and season data...");
-  const existingPlayers = await db.select().from(playersTable);
-  if (existingPlayers.length > 0) {
-    console.log(`  ↩ Players already seeded (${existingPlayers.length}). Skipping.`);
-    console.log("  ℹ To re-seed, truncate the players table first.");
-    process.exit(0);
-  }
 
   // Deduplicate players by name (in case of copy-paste errors)
   const seen = new Set<string>();
@@ -992,19 +992,21 @@ async function seed() {
       battingStyle: p.battingStyle,
       bowlingStyle: p.bowlingStyle ?? null,
       age: p.age,
+      imageUrl: `https://avatar.iran.liara.run/username?username=${encodeURIComponent(p.name)}`, // dynamic visual avatar URL
+      dateOfBirth: `${2025 - p.age}-01-01`, // computed DOB string
     }).returning();
 
     for (const year of SEASONS) {
+      const ageForYear = p.age - (2025 - year);
+
       // Determine franchise for this year
-      const rawFranchise = p.franchiseByYear?.[year] !== undefined
-        ? p.franchiseByYear[year]          // explicit override (including null)
-        : p.defaultFranchise;              // fall back to 2025 assignment
+      // Younger players are not active if age is under 18
+      const rawFranchise = ageForYear >= 18
+        ? (p.franchiseByYear?.[year] !== undefined ? p.franchiseByYear[year] : p.defaultFranchise)
+        : null;
 
       const franchiseId = rawFranchise ? (franchiseMap[rawFranchise] ?? null) : null;
       const isCaptain = (p.captainYears ?? []).includes(year);
-
-      // Compute age for this year
-      const ageForYear = p.age - (2025 - year);
 
       const s = p.stats;
       await db.insert(playerSeasonsTable).values({
@@ -1026,6 +1028,15 @@ async function seed() {
           stumpings: s.stumpings ?? null,
         } : {}),
       });
+
+      // Seed season squads for historical tracking
+      if (franchiseId) {
+        await db.insert(seasonSquadsTable).values({
+          season: year,
+          franchiseId,
+          playerId: dbPlayer.id,
+        });
+      }
     }
     inserted++;
   }

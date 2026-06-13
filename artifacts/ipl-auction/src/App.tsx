@@ -74,25 +74,24 @@ function SignUpPage() {
   );
 }
 
+import { useAppAuth } from "@/hooks/useAppAuth";
+
 function HomeRedirect() {
-  return (
-    <>
-      <Show when="signed-in">
-        <Redirect to="/dashboard" />
-      </Show>
-      <Show when="signed-out">
-        <Home />
-      </Show>
-    </>
-  );
+  const { isSignedIn, isLoaded } = useAppAuth();
+  if (!isLoaded) return null;
+  if (isSignedIn) {
+    return <Redirect to="/dashboard" />;
+  }
+  return <Home />;
 }
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded } = useAppAuth();
   if (!isLoaded) return null;
-  if (!isSignedIn) return <Redirect to="/sign-in" />;
+  if (!isSignedIn) return <Redirect to="/" />;
   return <Component />;
 }
+
 
 function ProtectedDashboard() { return <ProtectedRoute component={Dashboard} />; }
 function ProtectedCreate() { return <ProtectedRoute component={CreateRoom} />; }

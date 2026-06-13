@@ -75,6 +75,8 @@ export interface RoomInput {
   maxOverseas: number;
   maxOwnersPerTeam: number;
   auctionSpeed: RoomInputAuctionSpeed;
+  rtmEnabled?: boolean;
+  maxRetentions?: number;
 }
 
 export type RoomStatus = typeof RoomStatus[keyof typeof RoomStatus];
@@ -101,6 +103,14 @@ export interface Room {
   maxOwnersPerTeam: number;
   auctionSpeed: string;
   currentPlayerIndex: number;
+  rtmEnabled?: boolean;
+  maxRetentions?: number;
+  /** @nullable */
+  rtmPendingTeamId?: number | null;
+  /** @nullable */
+  rtmBidAmountCrore?: number | null;
+  /** @nullable */
+  rtmBidderTeamId?: number | null;
   createdAt: string;
 }
 
@@ -231,6 +241,7 @@ export type AuctionStateStatus = typeof AuctionStateStatus[keyof typeof AuctionS
 export const AuctionStateStatus = {
   idle: 'idle',
   bidding: 'bidding',
+  rtm: 'rtm',
   sold: 'sold',
   unsold: 'unsold',
   completed: 'completed',
@@ -245,6 +256,10 @@ export interface AuctionState {
   currentBidderTeamName?: string | null;
   timerSeconds: number;
   status: AuctionStateStatus;
+  /** @nullable */
+  rtmPendingTeamId?: number | null;
+  /** @nullable */
+  rtmPendingTeamName?: string | null;
   totalPlayersAuctioned: number;
   totalPlayersRemaining: number;
 }
@@ -361,6 +376,10 @@ status?: string | null;
  * @nullable
  */
 search?: string | null;
+};
+
+export type MakeRtmDecisionBody = {
+  useRtm: boolean;
 };
 
 export type ListRoomMessagesParams = {

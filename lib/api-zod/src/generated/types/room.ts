@@ -21,5 +21,13 @@ export interface Room {
   maxOwnersPerTeam: number;
   auctionSpeed: string;
   currentPlayerIndex: number;
+  rtmEnabled?: boolean;
+  maxRetentions?: number;
+  /** @nullable */
+  rtmPendingTeamId?: number | null;
+  /** @nullable */
+  rtmBidAmountCrore?: number | null;
+  /** @nullable */
+  rtmBidderTeamId?: number | null;
   createdAt: string;
 }

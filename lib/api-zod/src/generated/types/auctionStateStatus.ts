@@ -12,6 +12,7 @@ export type AuctionStateStatus = typeof AuctionStateStatus[keyof typeof AuctionS
 export const AuctionStateStatus = {
   idle: 'idle',
   bidding: 'bidding',
+  rtm: 'rtm',
   sold: 'sold',
   unsold: 'unsold',
   completed: 'completed',

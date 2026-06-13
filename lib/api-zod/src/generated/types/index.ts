@@ -20,6 +20,7 @@ export * from './joinRoomInput';
 export * from './listAuctionPoolParams';
 export * from './listRoomMessagesParams';
 export * from './listSeasonPlayersParams';
+export * from './makeRtmDecisionBody';
 export * from './message';
 export * from './messageInput';
 export * from './player';

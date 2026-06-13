@@ -34,3 +34,31 @@ export type AuctionPool = typeof auctionPoolTable.$inferSelect;
 export const insertBidSchema = createInsertSchema(bidsTable).omit({ id: true, placedAt: true });
 export type InsertBid = z.infer<typeof insertBidSchema>;
 export type Bid = typeof bidsTable.$inferSelect;
+
+export const retentionsTable = pgTable("retentions", {
+  id: serial("id").primaryKey(),
+  roomId: integer("room_id").notNull().references(() => roomsTable.id),
+  teamId: integer("team_id").notNull().references(() => teamsTable.id),
+  playerId: integer("player_id").notNull().references(() => playersTable.id),
+  priceCrore: numeric("price_crore", { precision: 5, scale: 2 }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const purchasesTable = pgTable("purchases", {
+  id: serial("id").primaryKey(),
+  roomId: integer("room_id").notNull().references(() => roomsTable.id),
+  teamId: integer("team_id").notNull().references(() => teamsTable.id),
+  playerId: integer("player_id").notNull().references(() => playersTable.id),
+  soldPriceCrore: numeric("sold_price_crore", { precision: 5, scale: 2 }).notNull(),
+  isRtmMatched: boolean("is_rtm_matched").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const insertRetentionSchema = createInsertSchema(retentionsTable).omit({ id: true, createdAt: true });
+export type InsertRetention = z.infer<typeof insertRetentionSchema>;
+export type Retention = typeof retentionsTable.$inferSelect;
+
+export const insertPurchaseSchema = createInsertSchema(purchasesTable).omit({ id: true, createdAt: true });
+export type InsertPurchase = z.infer<typeof insertPurchaseSchema>;
+export type Purchase = typeof purchasesTable.$inferSelect;
+

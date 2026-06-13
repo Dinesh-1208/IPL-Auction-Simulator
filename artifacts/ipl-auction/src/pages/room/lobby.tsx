@@ -8,7 +8,7 @@ import {
   useStartAuction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useUser } from "@clerk/react";
+import { useAppUser } from "@/hooks/useAppAuth";
 import { useSocket } from "@/hooks/use-socket";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -17,7 +17,7 @@ import { Users, Copy, Check, Crown, Lock } from "lucide-react";
 export default function RoomLobby() {
   const params = useParams();
   const code = params.code as string;
-  const { user } = useUser();
+  const { user } = useAppUser();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
@@ -86,7 +86,7 @@ export default function RoomLobby() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user.id,
-          displayName: user.fullName || user.username || "Player",
+          displayName: user.fullName || "Player",
         }),
       });
       if (!res.ok) {

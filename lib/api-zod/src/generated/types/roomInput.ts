@@ -17,4 +17,6 @@ export interface RoomInput {
   maxOverseas: number;
   maxOwnersPerTeam: number;
   auctionSpeed: RoomInputAuctionSpeed;
+  rtmEnabled?: boolean;
+  maxRetentions?: number;
 }

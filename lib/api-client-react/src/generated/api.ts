@@ -31,6 +31,7 @@ import type {
   ListAuctionPoolParams,
   ListRoomMessagesParams,
   ListSeasonPlayersParams,
+  MakeRtmDecisionBody,
   Message,
   MessageInput,
   Player,
@@ -1508,6 +1509,78 @@ export const useMarkPlayerSold = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getMarkPlayerSoldMutationOptions(options));
+    }
+
+export const getMakeRtmDecisionUrl = (code: string,) => {
+
+
+
+
+  return `/api/rooms/${code}/auction/rtm`
+}
+
+/**
+ * @summary Make Right-To-Match decision (former franchise owner only)
+ */
+export const makeRtmDecision = async (code: string,
+    makeRtmDecisionBody: MakeRtmDecisionBody, options?: RequestInit): Promise<AuctionState> => {
+
+  return customFetch<AuctionState>(getMakeRtmDecisionUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      makeRtmDecisionBody,)
+  }
+);}
+
+
+
+
+export const getMakeRtmDecisionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof makeRtmDecision>>, TError,{code: string;data: BodyType<MakeRtmDecisionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof makeRtmDecision>>, TError,{code: string;data: BodyType<MakeRtmDecisionBody>}, TContext> => {
+
+const mutationKey = ['makeRtmDecision'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof makeRtmDecision>>, {code: string;data: BodyType<MakeRtmDecisionBody>}> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  makeRtmDecision(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MakeRtmDecisionMutationResult = NonNullable<Awaited<ReturnType<typeof makeRtmDecision>>>
+    export type MakeRtmDecisionMutationBody = BodyType<MakeRtmDecisionBody>
+    export type MakeRtmDecisionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Make Right-To-Match decision (former franchise owner only)
+ */
+export const useMakeRtmDecision = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof makeRtmDecision>>, TError,{code: string;data: BodyType<MakeRtmDecisionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof makeRtmDecision>>,
+        TError,
+        {code: string;data: BodyType<MakeRtmDecisionBody>},
+        TContext
+      > => {
+      return useMutation(getMakeRtmDecisionMutationOptions(options));
     }
 
 export const getMarkPlayerUnsoldUrl = (code: string,) => {

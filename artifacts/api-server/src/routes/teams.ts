@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from "express";
 import { db } from "@workspace/db";
 import {
   roomsTable, teamsTable, teamOwnersTable, franchisesTable,
-  auctionPoolTable, playersTable, roomMembersTable
+  auctionPoolTable, playersTable, roomMembersTable, retentionsTable
 } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { getSocketServer } from "../lib/socket";
@@ -125,18 +125,40 @@ router.post("/:teamId/retain", async (req: Request<{ code: string; teamId: strin
 
   const { playerIds, retentionPricesCrore } = req.body as { playerIds?: number[]; retentionPricesCrore?: number[] };
 
+  // Validate custom limit of retentions
+  const maxRetentions = room[0].maxRetentions ?? 6;
+  if (playerIds && playerIds.length > maxRetentions) {
+    res.status(400).json({ error: `Cannot retain more than ${maxRetentions} players under configured custom settings` });
+    return;
+  }
+
+  // Calculate cost and validate budget
+  let totalRetentionCost = 0;
+  if (retentionPricesCrore) {
+    totalRetentionCost = retentionPricesCrore.reduce((sum, p) => sum + p, 0);
+  }
+  const startingBudget = parseFloat(room[0].budgetCrore as string);
+  if (totalRetentionCost > startingBudget) {
+    res.status(400).json({ error: `Total retention cost (${totalRetentionCost} Cr) exceeds starting franchise budget (${startingBudget} Cr)` });
+    return;
+  }
+
+  // Clear previous retentions
   await db.delete(auctionPoolTable)
     .where(and(
       eq(auctionPoolTable.roomId, room[0].id),
       eq(auctionPoolTable.isRetained, true),
       eq(auctionPoolTable.soldToTeamId, teamId)
     ));
+  await db.delete(retentionsTable)
+    .where(and(
+      eq(retentionsTable.roomId, room[0].id),
+      eq(retentionsTable.teamId, teamId)
+    ));
 
-  let totalRetentionCost = 0;
   if (playerIds && playerIds.length > 0) {
     for (let i = 0; i < playerIds.length; i++) {
       const priceCrore = retentionPricesCrore?.[i] ?? 0;
-      totalRetentionCost += priceCrore;
       await db.insert(auctionPoolTable).values({
         roomId: room[0].id,
         playerId: playerIds[i],
@@ -147,10 +169,18 @@ router.post("/:teamId/retain", async (req: Request<{ code: string; teamId: strin
         isRetained: true,
         auctionOrder: -1,
       });
+
+      // Insert retention log record
+      await db.insert(retentionsTable).values({
+        roomId: room[0].id,
+        teamId,
+        playerId: playerIds[i],
+        priceCrore: priceCrore.toString(),
+      });
     }
   }
 
-  const newBudgetRemaining = parseFloat(room[0].budgetCrore as string) - totalRetentionCost;
+  const newBudgetRemaining = startingBudget - totalRetentionCost;
   const [updatedTeam] = await db.update(teamsTable)
     .set({
       budgetRemainingCrore: newBudgetRemaining.toString(),

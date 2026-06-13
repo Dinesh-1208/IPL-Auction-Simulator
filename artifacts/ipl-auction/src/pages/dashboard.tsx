@@ -1,5 +1,6 @@
 import { Link } from "wouter";
-import { useAuth, UserButton } from "@clerk/react";
+import { useAppAuth } from "@/hooks/useAppAuth";
+import { AppUserButton } from "@/components/AppUserButton";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Users, Clock, Trophy } from "lucide-react";
@@ -29,7 +30,7 @@ const statusLabels: Record<string, string> = {
 };
 
 export default function Dashboard() {
-  const { isLoaded, userId } = useAuth();
+  const { isLoaded, userId } = useAppAuth();
 
   const { data: rooms = [], isLoading } = useQuery<RoomSummary[]>({
     queryKey: ["/api/rooms/my", userId],
@@ -51,22 +52,22 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background bg-broadcast">
       <header className="px-6 py-4 flex items-center justify-between border-b border-border/40 bg-background/95 backdrop-blur sticky top-0 z-10">
-        <Link href="/" className="text-xl font-bold tracking-tighter hover:text-primary transition-colors">
+        <Link href="/" className="text-xl font-bold tracking-tighter hover:text-primary transition-colors ipl-gradient-text">
           IPL Auction
         </Link>
         <div className="flex items-center gap-4">
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" className="glass-card hover:bg-white/10">
             <Link href="/join">Join Room</Link>
           </Button>
-          <Button asChild size="sm">
+          <Button asChild size="sm" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-semibold shadow-md glow-gold">
             <Link href="/create">
               <PlusCircle className="w-4 h-4 mr-2" />
               Create Room
             </Link>
           </Button>
-          <UserButton />
+          <AppUserButton />
         </div>
       </header>
 

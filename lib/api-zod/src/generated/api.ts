@@ -81,6 +81,9 @@ export const ListSeasonPlayersResponse = zod.array(ListSeasonPlayersResponseItem
 /**
  * @summary Create an auction room
  */
+export const createRoomBodyRtmEnabledDefault = true;
+export const createRoomBodyMaxRetentionsDefault = 6;
+
 export const CreateRoomBody = zod.object({
   "name": zod.string(),
   "seasonYear": zod.number(),
@@ -89,7 +92,9 @@ export const CreateRoomBody = zod.object({
   "maxSquadSize": zod.number(),
   "maxOverseas": zod.number(),
   "maxOwnersPerTeam": zod.number(),
-  "auctionSpeed": zod.enum(['fast', 'normal', 'slow'])
+  "auctionSpeed": zod.enum(['fast', 'normal', 'slow']),
+  "rtmEnabled": zod.boolean().default(createRoomBodyRtmEnabledDefault),
+  "maxRetentions": zod.number().default(createRoomBodyMaxRetentionsDefault)
 })
 
 
@@ -114,6 +119,11 @@ export const GetRoomResponse = zod.object({
   "maxOwnersPerTeam": zod.number(),
   "auctionSpeed": zod.string(),
   "currentPlayerIndex": zod.number(),
+  "rtmEnabled": zod.boolean().optional(),
+  "maxRetentions": zod.number().optional(),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmBidAmountCrore": zod.number().nullish(),
+  "rtmBidderTeamId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 
@@ -183,6 +193,11 @@ export const StartAuctionResponse = zod.object({
   "maxOwnersPerTeam": zod.number(),
   "auctionSpeed": zod.string(),
   "currentPlayerIndex": zod.number(),
+  "rtmEnabled": zod.boolean().optional(),
+  "maxRetentions": zod.number().optional(),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmBidAmountCrore": zod.number().nullish(),
+  "rtmBidderTeamId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 
@@ -209,6 +224,11 @@ export const GetRoomSummaryResponse = zod.object({
   "maxOwnersPerTeam": zod.number(),
   "auctionSpeed": zod.string(),
   "currentPlayerIndex": zod.number(),
+  "rtmEnabled": zod.boolean().optional(),
+  "maxRetentions": zod.number().optional(),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmBidAmountCrore": zod.number().nullish(),
+  "rtmBidderTeamId": zod.number().nullish(),
   "createdAt": zod.string()
 }),
   "teamCount": zod.number(),
@@ -246,6 +266,11 @@ export const GetMyRoomsResponseItem = zod.object({
   "maxOwnersPerTeam": zod.number(),
   "auctionSpeed": zod.string(),
   "currentPlayerIndex": zod.number(),
+  "rtmEnabled": zod.boolean().optional(),
+  "maxRetentions": zod.number().optional(),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmBidAmountCrore": zod.number().nullish(),
+  "rtmBidderTeamId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 export const GetMyRoomsResponse = zod.array(GetMyRoomsResponseItem)
@@ -452,7 +477,9 @@ export const GetCurrentAuctionPlayerResponse = zod.object({
   "currentBidderTeamId": zod.number().nullish(),
   "currentBidderTeamName": zod.string().nullish(),
   "timerSeconds": zod.number(),
-  "status": zod.enum(['idle', 'bidding', 'sold', 'unsold', 'completed']),
+  "status": zod.enum(['idle', 'bidding', 'rtm', 'sold', 'unsold', 'completed']),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmPendingTeamName": zod.string().nullish(),
   "totalPlayersAuctioned": zod.number(),
   "totalPlayersRemaining": zod.number()
 })
@@ -489,7 +516,9 @@ export const PlaceBidResponse = zod.object({
   "currentBidderTeamId": zod.number().nullish(),
   "currentBidderTeamName": zod.string().nullish(),
   "timerSeconds": zod.number(),
-  "status": zod.enum(['idle', 'bidding', 'sold', 'unsold', 'completed']),
+  "status": zod.enum(['idle', 'bidding', 'rtm', 'sold', 'unsold', 'completed']),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmPendingTeamName": zod.string().nullish(),
   "totalPlayersAuctioned": zod.number(),
   "totalPlayersRemaining": zod.number()
 })
@@ -521,7 +550,47 @@ export const MarkPlayerSoldResponse = zod.object({
   "currentBidderTeamId": zod.number().nullish(),
   "currentBidderTeamName": zod.string().nullish(),
   "timerSeconds": zod.number(),
-  "status": zod.enum(['idle', 'bidding', 'sold', 'unsold', 'completed']),
+  "status": zod.enum(['idle', 'bidding', 'rtm', 'sold', 'unsold', 'completed']),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmPendingTeamName": zod.string().nullish(),
+  "totalPlayersAuctioned": zod.number(),
+  "totalPlayersRemaining": zod.number()
+})
+
+
+/**
+ * @summary Make Right-To-Match decision (former franchise owner only)
+ */
+export const MakeRtmDecisionParams = zod.object({
+  "code": zod.coerce.string()
+})
+
+export const MakeRtmDecisionBody = zod.object({
+  "useRtm": zod.boolean()
+})
+
+export const MakeRtmDecisionResponse = zod.object({
+  "currentPlayer": zod.object({
+  "id": zod.number(),
+  "playerId": zod.number(),
+  "name": zod.string(),
+  "role": zod.string(),
+  "nationality": zod.string(),
+  "isOverseas": zod.boolean(),
+  "basePriceCrore": zod.number(),
+  "status": zod.enum(['available', 'sold', 'unsold', 'retained']),
+  "soldToCrore": zod.number().nullish(),
+  "soldToTeamId": zod.number().nullish(),
+  "soldToTeamName": zod.string().nullish(),
+  "previousTeamName": zod.string().nullish()
+}).optional(),
+  "currentBidCrore": zod.number(),
+  "currentBidderTeamId": zod.number().nullish(),
+  "currentBidderTeamName": zod.string().nullish(),
+  "timerSeconds": zod.number(),
+  "status": zod.enum(['idle', 'bidding', 'rtm', 'sold', 'unsold', 'completed']),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmPendingTeamName": zod.string().nullish(),
   "totalPlayersAuctioned": zod.number(),
   "totalPlayersRemaining": zod.number()
 })
@@ -553,7 +622,9 @@ export const MarkPlayerUnsoldResponse = zod.object({
   "currentBidderTeamId": zod.number().nullish(),
   "currentBidderTeamName": zod.string().nullish(),
   "timerSeconds": zod.number(),
-  "status": zod.enum(['idle', 'bidding', 'sold', 'unsold', 'completed']),
+  "status": zod.enum(['idle', 'bidding', 'rtm', 'sold', 'unsold', 'completed']),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmPendingTeamName": zod.string().nullish(),
   "totalPlayersAuctioned": zod.number(),
   "totalPlayersRemaining": zod.number()
 })
@@ -585,7 +656,9 @@ export const NextPlayerResponse = zod.object({
   "currentBidderTeamId": zod.number().nullish(),
   "currentBidderTeamName": zod.string().nullish(),
   "timerSeconds": zod.number(),
-  "status": zod.enum(['idle', 'bidding', 'sold', 'unsold', 'completed']),
+  "status": zod.enum(['idle', 'bidding', 'rtm', 'sold', 'unsold', 'completed']),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmPendingTeamName": zod.string().nullish(),
   "totalPlayersAuctioned": zod.number(),
   "totalPlayersRemaining": zod.number()
 })
@@ -629,6 +702,11 @@ export const CompleteAuctionResponse = zod.object({
   "maxOwnersPerTeam": zod.number(),
   "auctionSpeed": zod.string(),
   "currentPlayerIndex": zod.number(),
+  "rtmEnabled": zod.boolean().optional(),
+  "maxRetentions": zod.number().optional(),
+  "rtmPendingTeamId": zod.number().nullish(),
+  "rtmBidAmountCrore": zod.number().nullish(),
+  "rtmBidderTeamId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 
