@@ -1,0 +1,622 @@
+Build a Production-Ready IPL Auction Simulator (Version 1)
+
+Build a complete full-stack web application called IPL Auction Simulator that allows multiple users to recreate realistic IPL auctions using actual IPL squad data from previous seasons.
+
+The application should be production-ready, scalable, responsive, visually stunning, and support real-time multiplayer auctions.
+
+This is NOT a simple bidding website.
+
+The goal is to simulate being IPL franchise owners.
+
+Core Flow
+
+Example:
+
+Host selects season: 2025
+
+↓
+
+System loads actual IPL 2025 squads
+
+↓
+
+Teams perform retentions
+
+↓
+
+Released players enter auction pool
+
+↓
+
+Generate IPL 2026 auction
+
+↓
+
+Live multiplayer auction
+
+↓
+
+Final squads generated
+
+↓
+
+Gemini AI analyzes squads
+
+↓
+
+AI predicts rankings and winner
+Historical IPL Database
+
+Create a complete IPL database covering:
+
+2014
+2015
+2016
+2017
+2018
+2019
+2020
+2021
+2022
+2023
+2024
+2025
+
+For every season store:
+
+Season Year
+Team
+Player Name
+Player Image
+Role
+Country
+Age
+Batting Style
+Bowling Style
+Captain Status
+Previous Team
+Auction Price
+Retention Status
+Matches Played
+Runs
+Wickets
+Strike Rate
+Economy
+Playing XI Frequency
+
+Data must be imported from publicly available IPL datasets/APIs.
+
+Do not hardcode squads.
+
+Design the database so future IPL seasons can be imported without changing schema.
+
+Authentication
+
+Support:
+
+Google Login
+Email Login
+Guest Mode
+
+Profile should contain:
+
+Name
+Avatar
+Email
+Auction History
+Statistics
+Landing Page
+
+Create a premium IPL-themed homepage.
+
+Inspiration:
+
+IPL Official Website
+Cricbuzz
+ESPN Cricinfo
+Dream11
+
+Requirements:
+
+Dark Theme
+Glassmorphism
+Premium UI
+Smooth Animations
+Responsive Design
+Mobile Friendly
+Modern Dashboard
+Create Auction Room
+
+Host creates room.
+
+Settings:
+
+Room Name
+
+Starting Season
+
+Auction Type:
+- Mega Auction
+- Mini Auction
+
+Auction Speed:
+- Fast
+- Normal
+- Slow
+
+Official Rules
+or
+Custom Rules
+
+Maximum Owners Per Franchise:
+1-3
+
+Generate room code.
+
+Example:
+
+IPL26ABC
+Join Room
+
+Users join using room code.
+
+Show lobby.
+
+Display:
+
+Connected Users
+Selected Franchises
+Ready Status
+Franchise Selection
+
+Teams:
+
+CSK
+MI
+RCB
+KKR
+SRH
+DC
+RR
+PBKS
+GT
+LSG
+
+Each franchise can have:
+
+1 Owner
+2 Owners
+3 Owners
+
+After limit reached:
+
+Team Locked
+Private Team Chat
+
+If multiple users own the same franchise:
+
+Create private team chat.
+
+Example:
+
+CSK Owners Chat
+
+Features:
+
+Real-Time Messaging
+Typing Indicator
+Online Status
+Message History
+
+Only owners of that team can access it.
+
+Season-Based Squad Loading
+
+Example:
+
+Host selects:
+
+2025
+
+System automatically loads:
+
+Actual IPL 2025 squads
+
+Example:
+
+CSK:
+Ruturaj
+Jadeja
+Pathirana
+Dube
+...
+
+MI:
+Rohit
+Bumrah
+Tilak
+...
+
+No manual player entry.
+
+Retention Phase
+
+Before auction begins:
+
+Each team enters retention phase.
+
+Display actual squad.
+
+Example:
+
+☑ Jadeja
+☑ Ruturaj
+☑ Pathirana
+☐ Others
+
+Retained players remain in squad.
+
+Released players enter auction pool.
+
+Retention Rules Engine
+
+Support two modes.
+
+Official IPL Rules
+
+System automatically applies:
+
+Retention Limits
+Retention Costs
+RTM Rules
+Budget Deductions
+
+Rules should be configurable per season.
+
+Custom Rules
+
+Host can configure:
+
+Maximum Retentions
+
+0-8
+
+RTM Enabled
+
+Yes/No
+
+Custom Purse
+
+Custom Squad Size
+Purse Management
+
+For each season store:
+
+Auction Purse
+Retention Costs
+RTM Rules
+Squad Limits
+Overseas Limits
+
+Example:
+
+2025 Purse = 120 Cr
+
+Apply automatically.
+
+Right To Match (RTM)
+
+Support RTM.
+
+Example:
+
+RCB releases Siraj
+
+Auction occurs
+
+CSK wins bid
+
+System asks:
+
+Use RTM?
+
+YES
+NO
+
+If YES:
+
+Siraj returns to RCB
+
+Apply correct season rules.
+
+Auction Pool Generation
+
+Generate pool from:
+
+Released Players
+Unsold Players
+New Domestic Players
+New Overseas Players
+Imported Auction Lists
+
+Allow administrator imports.
+
+Live Auction Engine
+
+Main screen should contain:
+
+Player Card
+Photo
+Name
+Age
+Role
+Country
+Batting Style
+Bowling Style
+Previous Team
+Base Price
+Runs
+Wickets
+Strike Rate
+Economy
+Auction Panel
+Current Bid
+
+Bid History
+
+Countdown Timer
+
+Highest Bidder
+Team Dashboard
+Remaining Purse
+
+Players Bought
+
+Retained Players
+
+Overseas Count
+
+Indian Count
+
+Squad Size
+Auction Rules
+
+Enforce:
+
+Budget Limits
+
+Squad Limits
+
+Overseas Limits
+
+Retention Costs
+
+RTM Rules
+
+Cannot Exceed Purse
+
+Cannot Exceed Squad Size
+
+Cannot Exceed Overseas Slots
+Real-Time Functionality
+
+Use WebSockets / Socket.IO.
+
+Real-time updates for:
+
+Bidding
+Timer
+Chat
+Budgets
+Player Purchases
+Auction Results
+Room Events
+
+No page refreshes.
+
+Analytics Dashboard
+
+Show:
+
+Batters
+
+Bowlers
+
+All-Rounders
+
+Wicketkeepers
+
+Average Age
+
+Indian Players
+
+Overseas Players
+
+Money Spent
+
+Remaining Purse
+Historical Auction Recreation
+
+Support:
+
+Recreate IPL 2018 Mega Auction
+
+Recreate IPL 2022 Mega Auction
+
+Recreate IPL 2025 Mini Auction
+
+using actual squads from the previous season.
+
+Auction Completion
+
+When auction ends:
+
+Lock squads.
+
+Generate final team JSON.
+
+Example:
+
+{
+  "season": 2026,
+  "teams": {
+    "CSK": {
+      "retainedPlayers": [],
+      "auctionPlayers": [],
+      "remainingPurse": 4.5
+    }
+  }
+}
+Gemini AI Integration
+
+Send all squads to Gemini.
+
+Prompt Gemini:
+
+Act as an IPL analyst.
+
+Evaluate every franchise based on:
+
+Batting Depth
+Top Order
+Middle Order
+Finishers
+Spin Attack
+Pace Attack
+Death Bowling
+Powerplay Bowling
+Indian Core
+Overseas Core
+Bench Strength
+Captaincy
+Fielding
+Squad Balance
+
+Rank all teams from 1 to 10.
+
+Predict:
+
+IPL Winner
+Runner Up
+Playoff Teams
+
+Explain strengths and weaknesses of every squad.
+AI Results Page
+
+Create beautiful rankings page.
+
+Display:
+
+Predicted Champion
+
+Team Rankings
+
+Strengths
+
+Weaknesses
+
+Squad Ratings
+
+Spider/Radar Charts
+
+Auction Efficiency Scores
+Tech Stack
+
+Frontend:
+
+Next.js 15
+TypeScript
+Tailwind CSS
+Shadcn UI
+Framer Motion
+
+Backend:
+
+Node.js
+Express.js
+Socket.IO
+
+Database:
+
+PostgreSQL
+Prisma ORM
+
+Cache:
+
+Redis
+
+Authentication:
+
+NextAuth
+
+AI:
+
+Gemini API
+
+Hosting:
+
+Vercel
+Railway
+Neon PostgreSQL
+Database Tables
+
+Create complete schema for:
+
+users
+profiles
+rooms
+room_members
+franchises
+team_owners
+players
+player_seasons
+season_squads
+retentions
+auction_pools
+bids
+purchases
+messages
+notifications
+ai_reports
+
+Include proper indexing and relations.
+
+Deliverables
+
+Generate:
+
+Full Project Architecture
+
+Database Schema
+
+Prisma Models
+
+Backend APIs
+
+Socket.IO Events
+
+Folder Structure
+
+UI Wireframes
+
+Authentication Flow
+
+Auction Engine
+
+Retention Engine
+
+RTM Engine
+
+Gemini Integration
+
+Seed Scripts
+
+IPL Data Import Scripts
+
+Deployment Guide
+
+Environment Variables
+
+Production-Ready Source Code
+
+Build everything with clean architecture, modular design, scalability, security best practices, and enterprise-grade code quality.

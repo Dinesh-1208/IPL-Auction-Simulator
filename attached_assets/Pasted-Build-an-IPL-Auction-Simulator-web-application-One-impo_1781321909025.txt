@@ -1,0 +1,110 @@
+Build an IPL Auction Simulator web application.
+
+One important requirement is that the application must maintain a complete IPL player database for every season from 2014 onwards.
+
+The system should automatically fetch/import IPL squad and auction data from publicly available sources and store it in a database. Do not hardcode player lists.
+
+Database should contain:
+
+- Seasons
+- Teams
+- Players
+- Squad memberships
+- Auction prices
+- Retention status
+- Nationality
+- Role (Batsman, Bowler, All-Rounder, Wicket Keeper)
+- Previous Team
+- Age
+- Statistics
+
+Example:
+
+Season 2025
+CSK Squad
+- Ruturaj Gaikwad
+- Ravindra Jadeja
+- Shivam Dube
+- Matheesha Pathirana
+
+MI Squad
+- Rohit Sharma
+- Jasprit Bumrah
+- Tilak Varma
+...
+
+When a host creates an auction room, they must first select a season.
+
+Example:
+
+Select Season: 2025
+
+The system should interpret this as:
+
+"Use actual IPL 2025 squads as the starting point and conduct the IPL 2026 auction."
+
+Before the auction starts, every franchise must go through a Retention Phase.
+
+Example:
+
+CSK Squad:
+
+✓ Ravindra Jadeja
+✓ Ruturaj Gaikwad
+✓ Matheesha Pathirana
+✗ Remaining Players
+
+Retained players stay with the franchise.
+
+Released players automatically move into the auction pool.
+
+The retention system should support:
+
+1. Official IPL Rules
+   - Retention limits
+   - Purse deductions
+   - RTM rules
+   - Squad limits
+
+2. Custom Rules
+   - Custom retention count
+   - Custom purse
+   - Enable/Disable RTM
+   - Custom squad size
+
+After all teams finish retentions:
+
+Generate the auction pool using:
+
+- Released players
+- Unsold players from previous auctions
+- New domestic players
+- New overseas players
+
+The auction pool should be dynamically generated based on the selected season.
+
+Example:
+
+Season Selected: 2025
+
+Auction Pool:
+- Released 2025 Players
+- Unsold 2025 Players
+- New 2026 Registered Players
+
+Every player card shown during auction should display:
+
+- Player photo
+- Name
+- Role
+- Country
+- Age
+- Batting style
+- Bowling style
+- Previous team
+- Base price
+- Season statistics
+
+The database architecture must be scalable so future IPL seasons can be added without schema changes.
+
+The entire auction system should revolve around historical season data, retentions, released players, and dynamically generated auction pools rather than a fixed player list.
