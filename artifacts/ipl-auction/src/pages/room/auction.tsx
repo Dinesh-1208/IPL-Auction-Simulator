@@ -229,6 +229,19 @@ export default function RoomAuction() {
     }
   }, [auctionState?.status]);
 
+  // Redirect if status is not auction
+  useEffect(() => {
+    if (room && room.status !== "auction") {
+      if (room.status === "lobby") {
+        setLocation(`/room/${code}/lobby`);
+      } else if (room.status === "preparation") {
+        setLocation(`/room/${code}/prepare`);
+      } else if (room.status === "completed") {
+        setLocation(`/room/${code}/results`);
+      }
+    }
+  }, [room, code, setLocation]);
+
   // Auto-advance auction when timer hits 0
   useEffect(() => {
     if (timer === 0) {

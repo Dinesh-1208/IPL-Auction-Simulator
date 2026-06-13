@@ -50,6 +50,18 @@ export default function RoomLobby() {
   );
 
   useEffect(() => {
+    if (room && room.status !== "lobby") {
+      if (room.status === "preparation") {
+        setLocation(`/room/${code}/prepare`);
+      } else if (room.status === "auction") {
+        setLocation(`/room/${code}/auction`);
+      } else if (room.status === "completed") {
+        setLocation(`/room/${code}/results`);
+      }
+    }
+  }, [room, code, setLocation]);
+
+  useEffect(() => {
     if (!socket) return;
     const onFranchiseSelected = () => {
       queryClient.invalidateQueries({ queryKey: getGetRoomTeamsQueryKey(code) });
@@ -59,7 +71,13 @@ export default function RoomLobby() {
       queryClient.invalidateQueries({ queryKey: getGetRoomMembersQueryKey(code) });
     };
     const onStatusChanged = ({ status }: { status: string }) => {
-      if (status === "preparation") setLocation(`/room/${code}/prepare`);
+      if (status === "preparation") {
+        setLocation(`/room/${code}/prepare`);
+      } else if (status === "auction") {
+        setLocation(`/room/${code}/auction`);
+      } else if (status === "completed") {
+        setLocation(`/room/${code}/results`);
+      }
     };
     socket.on("room:franchise_selected", onFranchiseSelected);
     socket.on("room:member_joined", onMemberJoined);

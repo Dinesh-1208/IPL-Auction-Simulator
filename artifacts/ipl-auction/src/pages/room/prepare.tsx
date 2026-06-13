@@ -94,9 +94,27 @@ export default function RoomPrepare() {
   const maxUncappedRetentions = 2;
 
   useEffect(() => {
+    if (room && room.status !== "preparation") {
+      if (room.status === "lobby") {
+        setLocation(`/room/${code}/lobby`);
+      } else if (room.status === "auction") {
+        setLocation(`/room/${code}/auction`);
+      } else if (room.status === "completed") {
+        setLocation(`/room/${code}/results`);
+      }
+    }
+  }, [room, code, setLocation]);
+
+  useEffect(() => {
     if (!socket) return;
     const onStatusChanged = ({ status }: { status: string }) => {
-      if (status === "auction") setLocation(`/room/${code}/auction`);
+      if (status === "lobby") {
+        setLocation(`/room/${code}/lobby`);
+      } else if (status === "auction") {
+        setLocation(`/room/${code}/auction`);
+      } else if (status === "completed") {
+        setLocation(`/room/${code}/results`);
+      }
     };
     socket.on("room:status_changed", onStatusChanged);
     return () => { socket.off("room:status_changed", onStatusChanged); };
