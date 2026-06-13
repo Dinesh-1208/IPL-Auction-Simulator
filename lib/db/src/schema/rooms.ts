@@ -22,6 +22,7 @@ export const roomsTable = pgTable("rooms", {
   rtmPendingTeamId: integer("rtm_pending_team_id"),
   rtmBidAmountCrore: numeric("rtm_bid_amount_crore", { precision: 5, scale: 2 }),
   rtmBidderTeamId: integer("rtm_bidder_team_id"),
+  currentPlayerDrawnAt: timestamp("current_player_drawn_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

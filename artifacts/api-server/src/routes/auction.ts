@@ -221,7 +221,12 @@ router.get("/current", async (req: Request<{ code: string }>, res: Response): Pr
   }
 
   const speedTimer: Record<string, number> = { fast: 15, normal: 30, slow: 45 };
-  const timerSeconds = speedTimer[room.auctionSpeed] ?? 30;
+  const totalDuration = speedTimer[room.auctionSpeed] ?? 30;
+  let timerSeconds = totalDuration;
+  if (room.currentPlayerDrawnAt) {
+    const elapsed = Math.floor((Date.now() - new Date(room.currentPlayerDrawnAt).getTime()) / 1000);
+    timerSeconds = Math.max(0, totalDuration - elapsed);
+  }
 
   res.json({
     currentPlayer: playerCard,
@@ -241,7 +246,7 @@ router.post("/bid", async (req: Request<{ code: string }>, res: Response): Promi
   if (!room) { res.status(404).json({ error: "Room not found" }); return; }
   if (room.status !== "auction") { res.status(400).json({ error: "Auction not active" }); return; }
 
-  const { teamId, bidAmountCrore } = req.body;
+  const { teamId, bidAmountCrore, playerId } = req.body;
   if (!teamId || !bidAmountCrore) { res.status(400).json({ error: "teamId and bidAmountCrore required" }); return; }
 
   const team = await db.select().from(teamsTable).where(eq(teamsTable.id, teamId)).limit(1);
@@ -261,6 +266,10 @@ router.post("/bid", async (req: Request<{ code: string }>, res: Response): Promi
   if (!available.length) { res.status(400).json({ error: "No player currently being auctioned" }); return; }
 
   const currentEntry = available[0];
+  if (playerId && currentEntry.playerId !== parseInt(playerId)) {
+    res.status(400).json({ error: "Active player mismatch" });
+    return;
+  }
   const basePriceCrore = parseFloat(currentEntry.basePriceCrore as string);
 
   if (bidAmountCrore < basePriceCrore) {
@@ -283,6 +292,10 @@ router.post("/bid", async (req: Request<{ code: string }>, res: Response): Promi
     teamId,
     bidAmountCrore: bidAmountCrore.toString(),
   });
+
+  // Reset bidding countdown timer
+  await db.update(roomsTable).set({ currentPlayerDrawnAt: new Date() })
+    .where(eq(roomsTable.id, room.id));
 
   const franchise = await db.select().from(franchisesTable).where(eq(franchisesTable.id, team[0].franchiseId)).limit(1);
 
@@ -327,6 +340,11 @@ router.post("/sold", async (req: Request<{ code: string }>, res: Response): Prom
   if (!available.length) { res.status(400).json({ error: "No player to sell" }); return; }
 
   const currentEntry = available[0];
+  const { playerId } = req.body;
+  if (playerId && currentEntry.playerId !== parseInt(playerId)) {
+    res.status(400).json({ error: "Active player mismatch or already sold" });
+    return;
+  }
   const latestBid = await db.select().from(bidsTable)
     .where(eq(bidsTable.auctionPoolId, currentEntry.id))
     .orderBy(desc(bidsTable.placedAt))
@@ -559,6 +577,12 @@ router.post("/unsold", async (req: Request<{ code: string }>, res: Response): Pr
 
   if (!available.length) { res.status(400).json({ error: "No player to mark unsold" }); return; }
 
+  const { playerId } = req.body;
+  if (playerId && available[0].playerId !== parseInt(playerId)) {
+    res.status(400).json({ error: "Active player mismatch" });
+    return;
+  }
+
   await db.update(auctionPoolTable).set({ status: "unsold" })
     .where(eq(auctionPoolTable.id, available[0].id));
 
@@ -582,10 +606,46 @@ router.post("/next", async (req: Request<{ code: string }>, res: Response): Prom
   const room = await getAuctionRoom(req.params.code);
   if (!room) { res.status(404).json({ error: "Room not found" }); return; }
 
-  const io = getSocketServer();
-  if (io) io.to(req.params.code).emit("auction:next", {});
+  const available = await db.select().from(auctionPoolTable)
+    .where(and(eq(auctionPoolTable.roomId, room.id), eq(auctionPoolTable.status, "available")))
+    .orderBy(asc(auctionPoolTable.auctionOrder))
+    .limit(1);
 
-  await sendAuctionState(req.params.code, room, res);
+  if (available.length) {
+    const currentEntry = available[0];
+    const { playerId } = req.body;
+    if (playerId && currentEntry.playerId !== parseInt(playerId)) {
+      res.status(400).json({ error: "Active player mismatch or already skipped" });
+      return;
+    }
+
+    await db.update(auctionPoolTable).set({ status: "unsold" })
+      .where(eq(auctionPoolTable.id, currentEntry.id));
+
+    const player = await db.select().from(playersTable).where(eq(playersTable.id, available[0].playerId)).limit(1);
+    await db.insert(messagesTable).values({
+      roomId: room.id,
+      userId: "system",
+      displayName: "Auction",
+      content: `${player[0]?.name ?? "Player"} is UNSOLD.`,
+      isSystem: true,
+    });
+  }
+
+  const io = getSocketServer();
+  if (io) {
+    if (available.length) {
+      io.to(req.params.code).emit("auction:unsold", { playerId: available[0].playerId });
+    }
+    io.to(req.params.code).emit("auction:next", {});
+  }
+
+  // Save drawn timestamp for the next player
+  await db.update(roomsTable).set({ currentPlayerDrawnAt: new Date() })
+    .where(eq(roomsTable.id, room.id));
+
+  const freshRoom = await getAuctionRoom(req.params.code);
+  await sendAuctionState(req.params.code, freshRoom ?? room, res);
 });
 
 // GET /api/rooms/:code/auction/history
@@ -733,7 +793,14 @@ async function sendAuctionState(code: string, room: RoomRow, res: Response): Pro
     currentBidCrore: latestBid[0] ? parseFloat(latestBid[0].bidAmountCrore as string) : playerCard.basePriceCrore,
     currentBidderTeamId: latestBid[0]?.teamId ?? null,
     currentBidderTeamName,
-    timerSeconds: speedTimer[room.auctionSpeed] ?? 30,
+    timerSeconds: (() => {
+      const totalDuration = speedTimer[room.auctionSpeed] ?? 30;
+      if (room.currentPlayerDrawnAt) {
+        const elapsed = Math.floor((Date.now() - new Date(room.currentPlayerDrawnAt).getTime()) / 1000);
+        return Math.max(0, totalDuration - elapsed);
+      }
+      return totalDuration;
+    })(),
     status: "bidding",
     totalPlayersAuctioned: auctioned,
     totalPlayersRemaining: remaining,

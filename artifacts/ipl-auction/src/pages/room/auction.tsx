@@ -5,18 +5,18 @@ import {
   useGetRoomTeams, getGetRoomTeamsQueryKey,
   useGetCurrentAuctionPlayer, getGetCurrentAuctionPlayerQueryKey,
   usePlaceBid,
-  useNextPlayer,
   useCompleteAuction,
-  useMarkPlayerSold,
-  useMarkPlayerUnsold,
   useMakeRtmDecision,
+  useListAuctionPool,
+  getListAuctionPoolQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useSocket } from "@/hooks/use-socket";
 import { useAppUser } from "@/hooks/useAppAuth";
 import { Button } from "@/components/ui/button";
-import { Gavel, Trophy, SkipForward, X, Zap, Activity, MessageSquare, Timer, History, Award, AlertTriangle } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Gavel, Trophy, SkipForward, X, Zap, Activity, MessageSquare, Timer, History, Award, AlertTriangle, Users } from "lucide-react";
 
 type PlayerCard = {
   name: string;
@@ -79,27 +79,53 @@ export default function RoomAuction() {
   const [timer, setTimer] = useState<number | null>(null);
   const [bidHistory, setBidHistory] = useState<BidEvent[]>([]);
   const [pulseBid, setPulseBid] = useState(false);
+  const [isActionPending, setIsActionPending] = useState(false);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevPlayerIdRef = useRef<number | null>(null);
+  const prevBidderRef = useRef<number | null>(null);
+  const prevBidRef = useRef<number>(0);
 
   const { data: room } = useGetRoom(code, { query: { queryKey: getGetRoomQueryKey(code) } });
   const { data: roomTeams } = useGetRoomTeams(code, { query: { queryKey: getGetRoomTeamsQueryKey(code) } });
   const { data: auctionState, isLoading: auctionLoading } = useGetCurrentAuctionPlayer(code, {
     query: { queryKey: getGetCurrentAuctionPlayerQueryKey(code) },
   });
+  const { data: poolData } = useListAuctionPool(code, { status: "available" });
 
   const myTeam = roomTeams?.find((t) => t.owners.some((o) => o.userId === user?.id));
   const isHost = room?.hostUserId === user?.id;
 
   const placeBid = usePlaceBid();
-  const nextPlayer = useNextPlayer();
   const completeAuction = useCompleteAuction();
-  const markSold = useMarkPlayerSold();
-  const markUnsold = useMarkPlayerUnsold();
   const makeRtmDecision = useMakeRtmDecision();
 
-  const refreshAuction = () => queryClient.invalidateQueries({ queryKey: getGetCurrentAuctionPlayerQueryKey(code) });
+  const refreshAuction = () => {
+    queryClient.invalidateQueries({ queryKey: getGetCurrentAuctionPlayerQueryKey(code) });
+    queryClient.invalidateQueries({ queryKey: getListAuctionPoolQueryKey(code, { status: "available" }) });
+  };
   const refreshTeams = () => queryClient.invalidateQueries({ queryKey: getGetRoomTeamsQueryKey(code) });
+
+  const postAuctionAction = async (endpoint: "sold" | "unsold" | "next", body: any) => {
+    setIsActionPending(true);
+    try {
+      const res = await fetch(`/api/rooms/${code}/auction/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Action failed");
+      }
+      refreshAuction();
+    } catch (err: any) {
+      console.error(err);
+      toast({ variant: "destructive", title: "Action failed", description: err.message });
+    } finally {
+      setIsActionPending(false);
+    }
+  };
 
   useEffect(() => {
     if (!socket) return;
@@ -174,15 +200,27 @@ export default function RoomAuction() {
     };
   }, [socket, code, queryClient, setLocation, toast]);
 
-  // Start timer when player changes
+  // Start/Reset timer when player changes or a bid is placed
   useEffect(() => {
     const currentId = (auctionState?.currentPlayer as any)?.playerId ?? null;
-    if (currentId && currentId !== prevPlayerIdRef.current && auctionState?.timerSeconds) {
-      prevPlayerIdRef.current = currentId;
-      startTimer(auctionState.timerSeconds);
+    if (currentId && auctionState?.timerSeconds) {
+      const isNewPlayer = currentId !== prevPlayerIdRef.current;
+      const isNewBid = auctionState?.currentBidderTeamId !== prevBidderRef.current || auctionState?.currentBidCrore !== prevBidRef.current;
+
+      if (isNewPlayer || isNewBid) {
+        prevPlayerIdRef.current = currentId;
+        prevBidderRef.current = auctionState?.currentBidderTeamId ?? null;
+        prevBidRef.current = auctionState?.currentBidCrore ?? 0;
+        startTimer(auctionState.timerSeconds);
+      }
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [(auctionState?.currentPlayer as any)?.playerId]);
+  }, [
+    (auctionState?.currentPlayer as any)?.playerId,
+    auctionState?.currentBidderTeamId,
+    auctionState?.currentBidCrore,
+    auctionState?.timerSeconds
+  ]);
 
   // Handle RTM timer reset or start
   useEffect(() => {
@@ -190,6 +228,24 @@ export default function RoomAuction() {
       startTimer(30); // 30 seconds for RTM matching choice
     }
   }, [auctionState?.status]);
+
+  // Auto-advance auction when timer hits 0
+  useEffect(() => {
+    if (timer === 0) {
+      const activePlayerId = (auctionState?.currentPlayer as any)?.playerId;
+      if (!activePlayerId) return;
+
+      if (auctionState?.status === "bidding") {
+        if (auctionState?.currentBidderTeamId) {
+          handleSold(activePlayerId);
+        } else {
+          handleNext(activePlayerId);
+        }
+      } else if (auctionState?.status === "rtm") {
+        handleRtmDecision(false);
+      }
+    }
+  }, [timer, auctionState?.status, auctionState?.currentBidderTeamId, auctionState?.currentPlayer]);
 
   function startTimer(seconds: number) {
     if (timerRef.current) clearInterval(timerRef.current);
@@ -231,9 +287,24 @@ export default function RoomAuction() {
     );
   };
 
-  const handleSold = () => markSold.mutate({ code }, { onSuccess: refreshAuction });
-  const handleUnsold = () => markUnsold.mutate({ code }, { onSuccess: refreshAuction });
-  const handleNext = () => nextPlayer.mutate({ code }, { onSuccess: () => { refreshAuction(); prevPlayerIdRef.current = null; } });
+  const handleSold = (pId?: number) => {
+    const activeId = pId ?? (auctionState?.currentPlayer as any)?.playerId;
+    if (!activeId) return;
+    postAuctionAction("sold", { playerId: activeId });
+  };
+
+  const handleUnsold = (pId?: number) => {
+    const activeId = pId ?? (auctionState?.currentPlayer as any)?.playerId;
+    if (!activeId) return;
+    postAuctionAction("unsold", { playerId: activeId });
+  };
+
+  const handleNext = async (pId?: number) => {
+    const activeId = pId ?? (auctionState?.currentPlayer as any)?.playerId;
+    await postAuctionAction("next", { playerId: activeId });
+    prevPlayerIdRef.current = null;
+  };
+
   const handleComplete = () => completeAuction.mutate({ code }, { onSuccess: () => setLocation(`/room/${code}/results`) });
 
   const currentPlayer = auctionState?.currentPlayer as PlayerCard | null | undefined;
@@ -316,7 +387,7 @@ export default function RoomAuction() {
                     : "The simulator is ready. Draw the first player card to start live multiplayer bidding."}
                 </p>
                 {isHost && auctionState?.status !== "completed" && (
-                  <Button size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold h-12 px-8 rounded-xl glow-gold hover:scale-105 active:scale-95 transition-all" onClick={handleNext} disabled={nextPlayer.isPending}>
+                  <Button size="lg" className="bg-gradient-to-r from-amber-500 to-orange-600 text-white font-bold h-12 px-8 rounded-xl glow-gold hover:scale-105 active:scale-95 transition-all" onClick={() => handleNext()} disabled={isActionPending}>
                     <Gavel className="w-5 h-5 mr-2" />
                     Draw First Player
                   </Button>
@@ -498,45 +569,7 @@ export default function RoomAuction() {
                         Place Bid (₹{(currentBid + (currentBid < 10 ? 0.25 : 0.5)).toFixed(2)} Cr)
                       </Button>
                     )}
-                    
-                    {isHost && (
-                      <div className="flex gap-2 shrink-0">
-                        <Button
-                          variant="outline"
-                          size="lg"
-                          className="h-14 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 font-bold px-6 rounded-xl"
-                          onClick={handleSold}
-                          disabled={markSold.isPending || !auctionState?.currentBidderTeamId || isRtmActive}
-                        >
-                          <Trophy className="w-5 h-5 mr-1" />
-                          SOLD
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="lg"
-                          className="h-14 border-rose-500/30 text-rose-400 hover:bg-rose-500/10 font-bold px-6 rounded-xl"
-                          onClick={handleUnsold}
-                          disabled={markUnsold.isPending || isRtmActive}
-                        >
-                          <X className="w-5 h-5 mr-1" />
-                          UNSOLD
-                        </Button>
-                      </div>
-                    )}
                   </div>
-
-                  {isHost && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-slate-400 hover:text-white transition-colors"
-                      onClick={handleNext}
-                      disabled={nextPlayer.isPending || isRtmActive}
-                    >
-                      <SkipForward className="w-4 h-4 mr-1.5" />
-                      Skip / Draw Next Player Card
-                    </Button>
-                  )}
                 </div>
 
               </div>
@@ -544,46 +577,100 @@ export default function RoomAuction() {
           </div>
         </div>
 
-        {/* Right Side: Sidebar split between Real-time Bids (top) and Team Budgets (bottom) */}
+        {/* Right Side: Sidebar split between Feed/Players (top) and Team Budgets (bottom) */}
         <div className="lg:col-span-1 border-t lg:border-t-0 lg:border-l border-white/5 bg-black/10 flex flex-col h-[calc(100vh-80px)] overflow-hidden">
           
-          {/* Top Half: Bidding feed */}
-          <div className="flex-1 flex flex-col overflow-hidden border-b border-white/5 p-5">
-            <h2 className="font-extrabold text-sm uppercase tracking-widest text-slate-300 mb-3 flex items-center gap-2">
-              <History className="w-4 h-4 text-amber-500" />
-              Bidding Feed
-            </h2>
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {bidHistory.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500 space-y-1">
-                  <MessageSquare className="w-8 h-8 text-slate-600" />
-                  <p className="text-xs font-semibold">Feed is empty</p>
-                  <p className="text-[10px] text-slate-600">Bids will appear here in real time</p>
-                </div>
-              ) : (
-                bidHistory.map((bh, idx) => (
-                  <div 
-                    key={idx} 
-                    className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all animate-in slide-in-from-top-1
-                      ${bh.isRtm 
-                        ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
-                        : idx === 0 
-                        ? 'bg-white/5 border-white/10 text-white font-bold shadow-inner' 
-                        : 'bg-black/20 border-white/5 text-slate-400'}`}
-                  >
-                    <div>
-                      <span className="font-bold">{bh.teamName}</span>
-                      {bh.isRtm && <span className="ml-1 text-[9px] font-black uppercase bg-amber-500/20 px-1 rounded">RTM</span>}
-                    </div>
-                    <div className="text-right flex items-center gap-2">
-                      <span className="font-bold font-mono">₹{bh.amount.toFixed(2)} Cr</span>
-                      <span className="text-[9px] text-slate-500 font-mono">{bh.timestamp}</span>
-                    </div>
+          {/* Top Half: Tabs for Bidding Feed / Players Left */}
+          <Tabs defaultValue="feed" className="flex-1 flex flex-col overflow-hidden border-b border-white/5 p-5">
+            <TabsList className="grid grid-cols-2 bg-white/5 border border-white/10 p-1 mb-4 rounded-xl">
+              <TabsTrigger value="feed" className="data-[state=active]:bg-white/10 text-xs font-bold uppercase tracking-wider py-1.5 rounded-lg text-slate-400 data-[state=active]:text-white transition-all">
+                Bidding Feed
+              </TabsTrigger>
+              <TabsTrigger value="players" className="data-[state=active]:bg-white/10 text-xs font-bold uppercase tracking-wider py-1.5 rounded-lg text-slate-400 data-[state=active]:text-white transition-all">
+                Players Left
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="feed" className="flex-1 flex flex-col overflow-hidden mt-0">
+              <h3 className="font-extrabold text-[10px] uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                <History className="w-3.5 h-3.5 text-amber-500" />
+                Live Bidding Events
+              </h3>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {bidHistory.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500 space-y-1">
+                    <MessageSquare className="w-8 h-8 text-slate-600" />
+                    <p className="text-xs font-semibold">Feed is empty</p>
+                    <p className="text-[10px] text-slate-600">Bids will appear here in real time</p>
                   </div>
-                ))
-              )}
-            </div>
-          </div>
+                ) : (
+                  bidHistory.map((bh, idx) => (
+                    <div 
+                      key={idx} 
+                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs transition-all animate-in slide-in-from-top-1
+                        ${bh.isRtm 
+                          ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' 
+                          : idx === 0 
+                          ? 'bg-white/5 border-white/10 text-white font-bold shadow-inner' 
+                          : 'bg-black/20 border-white/5 text-slate-400'}`}
+                    >
+                      <div>
+                        <span className="font-bold">{bh.teamName}</span>
+                        {bh.isRtm && <span className="ml-1 text-[9px] font-black uppercase bg-amber-500/20 px-1 rounded">RTM</span>}
+                      </div>
+                      <div className="text-right flex items-center gap-2">
+                        <span className="font-bold font-mono">₹{bh.amount.toFixed(2)} Cr</span>
+                        <span className="text-[9px] text-slate-500 font-mono">{bh.timestamp}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="players" className="flex-1 flex flex-col overflow-hidden mt-0">
+              <h3 className="font-extrabold text-[10px] uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-blue-500" />
+                Remaining Pool ({poolData?.length ?? 0})
+              </h3>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {!poolData || poolData.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-center p-4 text-slate-500 space-y-1">
+                    <Users className="w-8 h-8 text-slate-600" />
+                    <p className="text-xs font-semibold">No players left</p>
+                    <p className="text-[10px] text-slate-600">All players have been drawn</p>
+                  </div>
+                ) : (
+                  poolData.map((p) => {
+                    const skillColor = roleColor(p.role);
+                    return (
+                      <div 
+                        key={p.id} 
+                        className="p-2.5 rounded-xl border bg-black/20 border-white/5 flex items-center justify-between text-xs hover:border-white/15 transition-all"
+                      >
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <span className="font-bold text-white uppercase truncate">{p.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            <span 
+                              className="w-1.5 h-1.5 rounded-full shrink-0" 
+                              style={{ backgroundColor: skillColor }}
+                            />
+                            <span className="text-[10px] text-slate-400 font-semibold uppercase">{p.role}</span>
+                            <span className="text-[10px] text-slate-500">· {p.nationality}</span>
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="font-bold font-mono text-amber-400 bg-amber-400/5 border border-amber-400/10 px-2 py-0.5 rounded-lg">
+                            ₹{p.basePriceCrore.toFixed(2)} Cr
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
 
           {/* Bottom Half: Team budgets */}
           <div className="flex-1 flex flex-col overflow-hidden p-5 bg-black/10">

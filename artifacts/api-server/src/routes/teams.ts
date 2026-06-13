@@ -4,7 +4,7 @@ import {
   roomsTable, teamsTable, teamOwnersTable, franchisesTable,
   auctionPoolTable, playersTable, roomMembersTable, retentionsTable
 } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getSocketServer } from "../lib/socket";
 
 const router = Router({ mergeParams: true });
@@ -16,7 +16,10 @@ router.get("/", async (req: Request<{ code: string }>, res: Response): Promise<v
 
   const teams = await db.select().from(teamsTable).where(eq(teamsTable.roomId, room[0].id));
   const franchises = await db.select().from(franchisesTable);
-  const owners = await db.select().from(teamOwnersTable);
+  const teamIds = teams.map((t) => t.id);
+  const owners = teamIds.length > 0
+    ? await db.select().from(teamOwnersTable).where(inArray(teamOwnersTable.teamId, teamIds))
+    : [];
   const members = await db.select().from(roomMembersTable).where(eq(roomMembersTable.roomId, room[0].id));
 
   const franchiseMap = Object.fromEntries(franchises.map(f => [f.id, f]));

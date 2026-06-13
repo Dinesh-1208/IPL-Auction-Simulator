@@ -1,26 +1,31 @@
 import { useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useQueryClient } from '@tanstack/react-query';
+import { useAppUser } from './useAppAuth';
 
 export function useSocket(code?: string) {
   const socketRef = useRef<Socket | null>(null);
-  const queryClient = useQueryClient();
+  const { user } = useAppUser();
 
   useEffect(() => {
-    if (!code) return;
+    if (!code || !user?.id) return;
     
     const socket = io({ path: '/ws/socket.io' });
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('joinRoom', { code });
+      socket.emit('join_room', {
+        code,
+        userId: user.id,
+        displayName: user.fullName || "Player"
+      });
     });
 
     return () => {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [code]);
+  }, [code, user?.id, user?.fullName]);
 
   return socketRef.current;
 }
+

@@ -141,13 +141,11 @@ router.get("/:code/members", async (req: Request<{ code: string }>, res: Respons
     franchiseId: teamsTable.franchiseId,
   }).from(teamsTable).where(eq(teamsTable.roomId, room[0].id));
 
-  const owners = await db.select().from(teamOwnersTable);
   const franchises = await db.select().from(franchisesTable);
   const franchiseMap = Object.fromEntries(franchises.map(f => [f.id, f]));
 
   res.json(members.map((m) => {
-    const ownerEntry = owners.find((o) => o.userId === m.userId);
-    const team = ownerEntry ? teams.find((t) => t.id === ownerEntry.teamId) : null;
+    const team = m.teamId ? teams.find((t) => t.id === m.teamId) : null;
     const franchise = team ? franchiseMap[team.franchiseId] : null;
     return {
       id: m.id,
@@ -161,6 +159,7 @@ router.get("/:code/members", async (req: Request<{ code: string }>, res: Respons
     };
   }));
 });
+
 
 // POST /api/rooms/:code/start
 router.post("/:code/start", async (req: Request<{ code: string }>, res: Response): Promise<void> => {
@@ -181,7 +180,7 @@ router.post("/:code/start", async (req: Request<{ code: string }>, res: Response
   if (room[0].status === "preparation") {
     await buildAuctionPool(room[0].id, room[0].seasonYear);
     const [updated] = await db.update(roomsTable)
-      .set({ status: "auction" })
+      .set({ status: "auction", currentPlayerDrawnAt: new Date() })
       .where(eq(roomsTable.id, room[0].id))
       .returning();
     const io = getSocketServer();
@@ -303,8 +302,17 @@ async function buildAuctionPool(roomId: number, seasonYear: number): Promise<voi
     }
   }
 
+  const poolArray = Array.from(uniquePlayers.entries());
+  // Shuffle poolArray to randomize order of players yet to come
+  for (let i = poolArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const temp = poolArray[i];
+    poolArray[i] = poolArray[j];
+    poolArray[j] = temp;
+  }
+
   let order = 0;
-  for (const [playerId, basePriceCrore] of uniquePlayers.entries()) {
+  for (const [playerId, basePriceCrore] of poolArray) {
     await db.insert(auctionPoolTable).values({
       roomId,
       playerId,
