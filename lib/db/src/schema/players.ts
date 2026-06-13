@@ -33,6 +33,8 @@ export const playerSeasonsTable = pgTable("player_seasons", {
   economy: numeric("economy", { precision: 5, scale: 2 }),
   highScore: integer("high_score"),
   bestBowling: text("best_bowling"),
+  catches: integer("catches"),
+  stumpings: integer("stumpings"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

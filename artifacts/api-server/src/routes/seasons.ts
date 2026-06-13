@@ -40,8 +40,15 @@ router.get("/:year/players", async (req: Request, res: Response): Promise<void> 
 
   const { teamId, role, nationality } = req.query;
 
-  const conditions = [eq(playerSeasonsTable.seasonYear, year)];
-  if (teamId) conditions.push(eq(playerSeasonsTable.franchiseId, parseInt(teamId as string)));
+  const joinConds = [
+    eq(playerSeasonsTable.playerId, playersTable.id),
+    eq(playerSeasonsTable.seasonYear, year),
+  ];
+
+  const whereConds: Parameters<typeof and>[] = [];
+  if (teamId) whereConds.push(eq(playerSeasonsTable.franchiseId, parseInt(teamId as string)) as any);
+  if (role) whereConds.push(eq(playersTable.role, role as string) as any);
+  if (nationality) whereConds.push(eq(playersTable.nationality, nationality as string) as any);
 
   const rows = await db
     .select({
@@ -66,18 +73,14 @@ router.get("/:year/players", async (req: Request, res: Response): Promise<void> 
       economy: playerSeasonsTable.economy,
       highScore: playerSeasonsTable.highScore,
       bestBowling: playerSeasonsTable.bestBowling,
+      catches: playerSeasonsTable.catches,
+      stumpings: playerSeasonsTable.stumpings,
     })
     .from(playersTable)
-    .innerJoin(playerSeasonsTable, and(
-      eq(playerSeasonsTable.playerId, playersTable.id),
-      eq(playerSeasonsTable.seasonYear, year)
-    ));
+    .innerJoin(playerSeasonsTable, and(...joinConds))
+    .where(whereConds.length > 0 ? and(...(whereConds as any)) : undefined);
 
-  let filtered = rows.filter((p) => {
-    if (role && p.role !== role) return false;
-    if (nationality && p.nationality !== nationality) return false;
-    return true;
-  });
+  const filtered = rows;
 
   const franchiseIds = [...new Set(filtered.map((p) => p.franchiseId).filter((id): id is number => id != null))];
   const franchiseMap: Record<number, { name: string; shortName: string; primaryColor: string }> = {};
@@ -110,6 +113,8 @@ router.get("/:year/players", async (req: Request, res: Response): Promise<void> 
     economy: p.economy ? parseFloat(p.economy as string) : null,
     highScore: p.highScore,
     bestBowling: p.bestBowling,
+    catches: p.catches,
+    stumpings: p.stumpings,
   })));
 });
 
